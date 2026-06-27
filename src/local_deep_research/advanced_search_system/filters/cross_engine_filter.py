@@ -8,6 +8,7 @@ from loguru import logger
 
 from ...utilities.json_utils import extract_json, get_llm_response_text
 from .base_filter import BaseFilter
+from local_deep_research.prompts import render_prompt
 
 
 class CrossEngineFilter(BaseFilter):
@@ -149,18 +150,11 @@ class CrossEngineFilter(BaseFilter):
 
         context = "\n\n".join(preview_context)
 
-        prompt = f"""You are a search result filter. Your task is to rank search results from multiple engines by relevance to a query.
-
-Query: "{query}"
-
-Search Results:
-{context}
-
-Return the search results as a JSON array of indices, ranked from most to least relevant to the query.
-Only include indices of results that are actually relevant to the query.
-For example: [3, 0, 7, 1]
-
-If no results seem relevant to the query, return an empty array: []"""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.filters.cross_engine_filter.crossenginefilter.filter_results.prompt",
+            query=query,
+            context=context,
+        )
 
         try:
             # Get LLM's evaluation

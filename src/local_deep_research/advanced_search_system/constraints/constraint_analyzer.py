@@ -9,6 +9,7 @@ from langchain_core.language_models import BaseChatModel
 from loguru import logger
 
 from .base_constraint import Constraint, ConstraintType
+from local_deep_research.prompts import render_prompt
 
 
 class ConstraintAnalyzer:
@@ -20,40 +21,10 @@ class ConstraintAnalyzer:
 
     def extract_constraints(self, query: str) -> List[Constraint]:
         """Extract constraints from a query."""
-        prompt = f"""
-Generate constraints to verify if an answer candidate correctly answers this question.
-
-Question: {query}
-
-Create constraints that would help verify if a proposed answer is correct. Focus on the RELATIONSHIP between the question and answer, not just query analysis.
-
-Examples:
-- "Which university did Alice study at?" → "Alice studied at this university"
-- "What year was the company founded?" → "The company was founded in this year"
-- "Who invented the device?" → "This person invented the device"
-- "Where is the building located?" → "The building is located at this place"
-
-For each constraint, identify:
-1. Type: property, name_pattern, event, statistic, temporal, location, comparison, existence
-2. Description: What relationship must hold between question and answer
-3. Value: The specific relationship to verify
-4. Weight: How critical this constraint is (0.0-1.0)
-
-Format your response as:
-CONSTRAINT_1:
-Type: [type]
-Description: [description]
-Value: [value]
-Weight: [0.0-1.0]
-
-CONSTRAINT_2:
-Type: [type]
-Description: [description]
-Value: [value]
-Weight: [0.0-1.0]
-
-Focus on answer verification, not query parsing.
-"""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.constraints.constraint_analyzer.constraintanalyzer.extract_constraints.prompt",
+            query=query,
+        )
 
         response = self.model.invoke(prompt)
         content = response.content

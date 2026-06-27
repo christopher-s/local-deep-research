@@ -1081,6 +1081,15 @@
         if (category === 'notifications') return 'Notifications';
         if (category === 'search_parameters') return 'Search Parameters';
         if (category === 'warnings') return 'Warnings';
+        if (category === 'prompts_research') return 'Research and Agent Prompts';
+        if (category === 'prompts_synthesis') return 'Synthesis and Citation Prompts';
+        if (category === 'prompts_search_engines') return 'Search Engine Prompts';
+        if (category === 'prompts_news') return 'News Prompts';
+        if (category === 'prompts_benchmarks') return 'Benchmark Prompts';
+        if (category === 'prompts_reports') return 'Report Prompts';
+        if (category === 'prompts_api') return 'API Prompts';
+        if (category === 'prompts_chat') return 'Chat Prompts';
+        if (category === 'prompts_classification') return 'Classification Prompts';
 
         // Remove any underscores and capitalize each word
         let formattedCategory = category.replace(/_/g, ' ');
@@ -1105,7 +1114,8 @@
             'app': 'Application',
             'llm': 'Language Models',
             'search': 'Search Engines',
-            'report': 'Reports'
+            'report': 'Reports',
+            'prompts': 'Prompts'
         };
 
         // Map auxiliary key prefixes onto the tab that should render
@@ -1938,6 +1948,17 @@
         // Build HTML
         let html = '';
 
+        if (tab === 'prompts') {
+            html += `
+                <div class="ldr-backup-hint">
+                    Edit runtime instruction templates here. Preserve any
+                    <code>{{placeholder}}</code> tokens listed in a setting's description.
+                    Operator overrides use the standard environment-variable form
+                    <code>LDR_PROMPTS_...</code> and take precedence over saved values.
+                    Invalid overrides automatically fall back to the shipped template.
+                </div>`;
+        }
+
         // Add data location and backup status sections on app or all tab
         if (tab === 'app' || tab === 'all') {
             html += renderDataLocationSection();
@@ -1945,7 +1966,7 @@
         }
 
         // Define the order for the types in "all" tab
-        const typeOrder = ['llm', 'search', 'report', 'app', 'notifications'];
+        const typeOrder = ['llm', 'search', 'report', 'prompts', 'app', 'notifications'];
         const prefixTypes = Object.keys(groupedSettings);
 
         // Sort prefixes by the defined order for the "all" tab

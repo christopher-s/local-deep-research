@@ -10,6 +10,7 @@ from .config.llm_config import get_llm
 from .config.thread_settings import get_setting_from_snapshot
 from .search_system import AdvancedSearchSystem
 from .utilities.json_utils import get_llm_response_text
+from local_deep_research.prompts import render_prompt
 
 # Default constants for context accumulation to avoid repetition
 # These are used as fallbacks when settings are not available
@@ -138,30 +139,11 @@ class IntegratedReportGenerator:
     ) -> List[Dict]:
         """Analyze content and determine optimal report structure."""
         combined_content = findings["current_knowledge"]
-        prompt = f"""
-        Analyze this research content about: {query}
-
-        Content Summary:
-        {combined_content[:1000]}... [truncated]
-
-        Determine the most appropriate report structure by:
-        1. Analyzing the type of content (technical, business, academic, etc.)
-        2. Identifying main themes and logical groupings
-        3. Considering the depth and breadth of the research
-
-        Return a table of contents structure in this exact format:
-        STRUCTURE
-        1. [Section Name]
-           - [Subsection] | [purpose]
-        2. [Section Name]
-           - [Subsection] | [purpose]
-        ...
-        END_STRUCTURE
-
-        Make the structure specific to the content, not generic.
-        Each subsection must include its purpose after the | symbol.
-        DO NOT include sections about sources, citations, references, or methodology.
-        """
+        prompt = render_prompt(
+            "prompts.report_generator.integratedreportgenerator.determine_report_structure.prompt",
+            query=query,
+            combined_content_excerpt=combined_content[:1000],
+        )
 
         response = get_llm_response_text(self.model.invoke(prompt))
 

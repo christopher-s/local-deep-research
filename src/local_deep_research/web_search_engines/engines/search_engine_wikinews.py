@@ -13,6 +13,7 @@ from ...utilities.json_utils import extract_json, get_llm_response_text
 from ...utilities.search_utilities import remove_think_tags, LANGUAGE_CODE_MAP
 from ..search_engine_base import BaseSearchEngine
 from ...security import safe_get
+from local_deep_research.prompts import render_prompt
 
 HEADERS = {"User-Agent": USER_AGENT}
 WIKINEWS_LANGUAGES = [
@@ -134,29 +135,10 @@ class WikinewsSearchEngine(BaseSearchEngine):
 
         try:
             # Prompt for query optimization
-            prompt = f"""You are a query condenser. Your task is to transform the user’s natural-language question into a very short Wikinews search query.
-
-Input question:
-"{query}"
-
-STRICT OUTPUT REQUIREMENTS (follow ALL of them):
-1. Return ONLY a JSON object with EXACTLY one field: {{"query": "<refined_query>"}}.
-2. The JSON must be valid, minified, and contain no trailing text.
-3. The refined query must be extremely short: MAXIMUM 3–4 words.
-4. Include only the essential keywords (proper names, events, entities, places).
-5. Remove filler words (e.g., "news", "latest", "about", "what", "how", "is").
-6. DO NOT add Boolean operators (AND, OR).
-7. DO NOT use quotes inside the query.
-8. DO NOT add explanations or comments.
-
-EXAMPLES:
-- "What's the impact of rising interest rates on UK housing market?" → {{"query": "UK housing rates"}}
-- "Latest developments in the Ukraine-Russia peace negotiations" → {{"query": "Ukraine Russia negotiations"}}
-- "How are tech companies responding to AI regulation?" → {{"query": "tech AI regulation"}}
-- "What is Donald Trump's current political activity?" → {{"query": "Trump political activity"}}
-
-NOW RETURN ONLY THE JSON OBJECT.
-"""
+            prompt = render_prompt(
+                "prompts.web_search_engines.engines.search_engine_wikinews.wikinewssearchengine.optimize_query_for_wikinews.prompt",
+                query=query,
+            )
             # Get response from LLM
             response = self.llm.invoke(prompt)
             response_text = get_llm_response_text(response)
@@ -205,19 +187,14 @@ NOW RETURN ONLY THE JSON OBJECT.
             return
 
         try:
-            prompt = f"""Classify this query based on temporal scope.
-
-Query: "{query}"
-
-Current date: {datetime.now(UTC).strftime("%Y-%m-%d")}
-Cutoff: Events within the last {DEFAULT_RECENT_BACKWARD_DAYS} days are CURRENT
-
-Classification rules:
-- CURRENT: Recent events (last {DEFAULT_RECENT_BACKWARD_DAYS} days), ongoing situations, "latest", "recent", "today", "this week"
-- HISTORICAL: Events before {DEFAULT_RECENT_BACKWARD_DAYS} days ago, timelines, chronologies, past tense ("what happened", "history of")
-- UNCLEAR: Ambiguous temporal context
-
-Respond with ONE WORD ONLY: CURRENT, HISTORICAL, or UNCLEAR"""
+            prompt = render_prompt(
+                "prompts.web_search_engines.engines.search_engine_wikinews.wikinewssearchengine.adapt_date_range_for_query.prompt",
+                query=query,
+                strftime_4=datetime.now(UTC).strftime("%Y-%m-%d"),
+                default_recent_backward_days=DEFAULT_RECENT_BACKWARD_DAYS,
+                default_recent_backward_days_2=DEFAULT_RECENT_BACKWARD_DAYS,
+                default_recent_backward_days_3=DEFAULT_RECENT_BACKWARD_DAYS,
+            )
             # Get response from LLM
             response = self.llm.invoke(prompt)
             response_text = (

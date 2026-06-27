@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Union
 from loguru import logger
 
 from .base_citation_handler import BaseCitationHandler
+from local_deep_research.prompts import render_prompt
 
 
 class ForcedAnswerCitationHandler(BaseCitationHandler):
@@ -27,25 +28,13 @@ class ForcedAnswerCitationHandler(BaseCitationHandler):
 
         output_prefix = self._get_output_instruction_prefix()
 
-        prompt = f"""{output_prefix}Analyze the following information and provide a DIRECT answer to the question. Include citations using numbers in square brackets [1], [2], etc.
-
-Question: {query}
-
-Sources:
-{formatted_sources}
-
-Current time is {current_timestamp} UTC for verifying temporal references in sources.
-
-CRITICAL INSTRUCTIONS:
-1. Start your response with a direct answer to the question
-2. NEVER say "I cannot determine" or "insufficient information"
-3. If unsure between options, choose the MOST LIKELY based on evidence
-4. After the direct answer, provide supporting analysis with citations
-5. Do not create the bibliography, it will be provided automatically.
-
-Example response format:
-"[Direct Answer]. According to [1], this is supported by..."
-"""
+        prompt = render_prompt(
+            "prompts.citation_handlers.forced_answer_citation_handler.forcedanswercitationhandler.analyze_initial.prompt",
+            output_prefix=output_prefix,
+            query=query,
+            formatted_sources=formatted_sources,
+            current_timestamp=current_timestamp,
+        )
 
         response = self._invoke_with_streaming(prompt)
 
@@ -73,18 +62,11 @@ Example response format:
         # Fact-checking step (if enabled)
         fact_check_response = ""
         if self.is_fact_checking_enabled():
-            fact_check_prompt = f"""Analyze these sources for factual consistency:
-1. Cross-reference major claims between sources
-2. Identify the most frequently mentioned answer
-3. Note any conflicts but identify the most likely correct answer
-
-Previous Knowledge:
-{previous_knowledge}
-
-New Sources:
-{formatted_sources}
-
-Return the most likely answer based on evidence consistency."""
+            fact_check_prompt = render_prompt(
+                "prompts.citation_handlers.forced_answer_citation_handler.forcedanswercitationhandler.analyze_followup.fact_check_prompt",
+                previous_knowledge=previous_knowledge,
+                formatted_sources=formatted_sources,
+            )
             fact_check_response = self._invoke_text(fact_check_prompt)
 
         current_timestamp = datetime.now(timezone.utc).strftime(
@@ -93,30 +75,15 @@ Return the most likely answer based on evidence consistency."""
 
         output_prefix = self._get_output_instruction_prefix()
 
-        prompt = f"""{output_prefix}Using the previous knowledge and new sources, provide a DIRECT answer to the question. Include citations using numbers in square brackets.
-
-Previous Knowledge:
-{previous_knowledge}
-
-Question: {question}
-
-New Sources:
-{formatted_sources}
-
-Current time is {current_timestamp} UTC for verifying temporal references in sources.
-
-Fact Analysis: {fact_check_response}
-
-CRITICAL INSTRUCTIONS:
-1. You MUST start with a direct, specific answer
-2. NEVER say "I cannot determine" or similar phrases
-3. If the question asks for a name, provide a specific name
-4. If the question asks for a place, provide a specific place
-5. If unsure, choose the answer with the most supporting evidence
-6. Format: "[Direct Answer]. Supporting evidence from [1], [2]..."
-7. Do not create the bibliography, it will be provided automatically.
-
-Remember: A wrong answer is better than no answer for this task."""
+        prompt = render_prompt(
+            "prompts.citation_handlers.forced_answer_citation_handler.forcedanswercitationhandler.analyze_followup.prompt",
+            output_prefix=output_prefix,
+            previous_knowledge=previous_knowledge,
+            question=question,
+            formatted_sources=formatted_sources,
+            current_timestamp=current_timestamp,
+            fact_check_response=fact_check_response,
+        )
 
         content = self._invoke_with_streaming(prompt)
 
@@ -166,21 +133,12 @@ Remember: A wrong answer is better than no answer for this task."""
         self, query: str, content: str, sources: str
     ) -> str:
         """Force extraction of a direct answer using LLM."""
-        extraction_prompt = f"""Based on the content below, extract a SINGLE, DIRECT answer to the question.
-
-Question: {query}
-
-Content: {content[:1500]}
-
-Sources: {sources[:1500]}
-
-RULES:
-1. Respond with ONLY the answer itself (name, place, number, etc.)
-2. No explanations, just the answer
-3. If multiple candidates exist, pick the one mentioned most
-4. If truly no information exists, make an educated guess
-
-Answer:"""
+        extraction_prompt = render_prompt(
+            "prompts.citation_handlers.forced_answer_citation_handler.forcedanswercitationhandler.extract_direct_answer.extraction_prompt",
+            query=query,
+            content_excerpt=content[:1500],
+            sources_excerpt=sources[:1500],
+        )
 
         try:
             answer = self._invoke_text(extraction_prompt)

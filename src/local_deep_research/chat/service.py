@@ -33,6 +33,7 @@ from ..web.routes.globals import (
     set_termination_flag,
 )
 from ..constants import ResearchStatus
+from local_deep_research.prompts import render_prompt
 
 # Standard exception tuple for service-layer DB operations
 DB_EXCEPTIONS = (ValueError, RuntimeError, SQLAlchemyError)
@@ -1336,10 +1337,9 @@ class ChatService:
                 )
                 try:
                     llm = get_llm(settings_snapshot=settings_snapshot)
-                    prompt = (
-                        "Generate a concise 3-7 word title for this research "
-                        "query. Return ONLY the title, no quotes or "
-                        f"explanation.\n\nQuery: {query[:200]}"
+                    prompt = render_prompt(
+                        "prompts.chat.service.chatservice.generate_title.prompt",
+                        query_excerpt=query[:200],
                     )
                     future = pool.submit(llm.invoke, prompt)
                     try:

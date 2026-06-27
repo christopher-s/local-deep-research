@@ -12,6 +12,7 @@ from loguru import logger
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from ...utilities.json_utils import get_llm_response_text
+from local_deep_research.prompts import render_prompt
 
 
 class FollowUpContextHandler:
@@ -145,13 +146,10 @@ class FollowUpContextHandler:
         if not findings or not self.model:
             return []
 
-        prompt = f"""
-Extract key entities (names, places, organizations, concepts) from these research findings:
-
-{findings[:2000]}
-
-Return up to 10 most important entities, one per line.
-"""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.knowledge.followup_context_manager.followupcontexthandler.extract_entities.prompt",
+            findings_excerpt=findings[:2000],
+        )
 
         try:
             response = self.model.invoke(prompt)
@@ -270,28 +268,20 @@ Return up to 10 most important entities, one per line.
 
         # Build prompt based on purpose
         if purpose == "context" and original_query:
-            prompt = f"""
-Create a brief summary of previous research findings that are relevant to this follow-up question:
-
-Original research question: "{original_query}"
-Follow-up question: "{query}"
-
-Previous findings:
-{findings[:3000]}
-
-Provide a {max_sentences}-sentence summary focusing on aspects relevant to the follow-up question.
-"""
+            prompt = render_prompt(
+                "prompts.advanced_search_system.knowledge.followup_context_manager.followupcontexthandler.generate_summary.prompt",
+                original_query=original_query,
+                query=query,
+                findings_excerpt=findings[:3000],
+                max_sentences=max_sentences,
+            )
         else:
-            prompt = f"""
-Summarize these research findings in relation to the follow-up question:
-
-Follow-up question: "{query}"
-
-Findings:
-{findings[:4000]}
-
-Create a summary of {max_sentences} sentences that captures the most relevant information.
-"""
+            prompt = render_prompt(
+                "prompts.advanced_search_system.knowledge.followup_context_manager.followupcontexthandler.generate_summary.prompt_2",
+                query=query,
+                findings_excerpt=findings[:4000],
+                max_sentences=max_sentences,
+            )
 
         try:
             response = self.model.invoke(prompt)
@@ -327,16 +317,11 @@ Create a summary of {max_sentences} sentences that captures the most relevant in
         if not findings or not self.model:
             return []
 
-        prompt = f"""
-Based on the previous research and the follow-up question, identify information gaps:
-
-Previous research findings:
-{findings[:2000]}
-
-Follow-up question: "{follow_up_query}"
-
-What specific information is missing or needs clarification? List up to 5 gaps, one per line.
-"""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.knowledge.followup_context_manager.followupcontexthandler.identify_gaps.prompt",
+            findings_excerpt=findings[:2000],
+            follow_up_query=follow_up_query,
+        )
 
         try:
             response = self.model.invoke(prompt)

@@ -8,6 +8,7 @@ from typing import List, Optional
 from loguru import logger
 
 from .base_question import BaseQuestionGenerator
+from local_deep_research.prompts import render_prompt
 
 
 class StandardQuestionGenerator(BaseQuestionGenerator):
@@ -28,15 +29,21 @@ class StandardQuestionGenerator(BaseQuestionGenerator):
         logger.info("Generating follow-up questions...")
 
         if questions_by_iteration:
-            prompt = f"""Critically reflect current knowledge (e.g., timeliness), what {questions_per_iteration} high-quality internet search questions remain unanswered to exactly answer the query?
-            Query: {query}
-            Today: {current_time}
-            Past questions: {questions_by_iteration!s}
-            Knowledge: {current_knowledge}
-            Include questions that critically reflect current knowledge.
-            \n\n\nFormat: One question per line, e.g. \n Q: question1 \n Q: question2\n\n"""
+            prompt = render_prompt(
+                "prompts.advanced_search_system.questions.standard_question.standardquestiongenerator.generate_questions.prompt",
+                questions_per_iteration=questions_per_iteration,
+                query=query,
+                current_time=current_time,
+                questions_by_iteration=str(questions_by_iteration),
+                current_knowledge=current_knowledge,
+            )
         else:
-            prompt = f" You will have follow up questions. First, identify if your knowledge is outdated (high chance). Today: {current_time}. Generate {questions_per_iteration} high-quality internet search questions to exactly answer: {query}\n\n\nFormat: One question per line, e.g. \n Q: question1 \n Q: question2\n\n"
+            prompt = render_prompt(
+                "prompts.advanced_search_system.questions.standard_question.standardquestiongenerator.generate_questions.prompt_2",
+                current_time=current_time,
+                questions_per_iteration=questions_per_iteration,
+                query=query,
+            )
 
         response = self.model.invoke(prompt)
 
@@ -71,25 +78,11 @@ class StandardQuestionGenerator(BaseQuestionGenerator):
         Returns:
             List[str]: List of generated sub-questions
         """
-        prompt = f"""You are an expert at breaking down complex questions into simpler sub-questions.
-
-Original Question: {query}
-
-{context}
-
-Break down the original question into 2-5 simpler sub-questions that would help answer the original question when answered in sequence.
-Follow these guidelines:
-1. Each sub-question should be specific and answerable on its own
-2. Sub-questions should build towards answering the original question
-3. For multi-hop or complex queries, identify the individual facts or entities needed
-4. Ensure the sub-questions can be answered with separate searches
-
-Format your response as a numbered list with ONLY the sub-questions, one per line:
-1. First sub-question
-2. Second sub-question
-...
-
-Only provide the numbered sub-questions, nothing else."""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.questions.standard_question.standardquestiongenerator.generate_sub_questions.prompt",
+            query=query,
+            context=context,
+        )
 
         try:
             response = self.model.invoke(prompt)

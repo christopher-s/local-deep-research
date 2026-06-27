@@ -7,6 +7,7 @@ from loguru import logger
 from typing import List
 
 from ...utilities.json_utils import extract_json, get_llm_response_text
+from local_deep_research.prompts import render_prompt
 
 
 def generate_topics(
@@ -71,23 +72,15 @@ def _generate_with_llm(
                 else findings
             )
 
-            prompt = f"""Extract relevant topics/tags from this news content.
-
-Query: {query_preview}
-{f"Content: {findings_preview}" if findings_preview else ""}
-{f"Category: {category}" if category else ""}
-
-Generate {max_topics} specific, relevant topics that would help categorize and filter this news item.
-
-Requirements:
-- Each topic should be 1-3 words
-- Topics should be specific and meaningful
-- Include geographic regions if mentioned
-- Include key entities (countries, organizations, people)
-- Include event types (conflict, economy, disaster, etc.)
-- Topics should be diverse and cover different aspects
-
-Return ONLY a JSON array of topic strings, like: ["Topic 1", "Topic 2", "Topic 3"]"""
+            prompt = render_prompt(
+                "prompts.news.utils.topic_generator.generate_with_llm.prompt",
+                query_preview=query_preview,
+                conditional_4=f"Content: {findings_preview}"
+                if findings_preview
+                else "",
+                conditional_6=f"Category: {category}" if category else "",
+                max_topics=max_topics,
+            )
 
             response = llm.invoke(prompt)
             content = get_llm_response_text(response)

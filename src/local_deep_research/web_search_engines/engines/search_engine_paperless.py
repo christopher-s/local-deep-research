@@ -16,6 +16,7 @@ from loguru import logger
 
 from ..search_engine_base import BaseSearchEngine
 from ...security import safe_get
+from local_deep_research.prompts import render_prompt
 
 
 class PaperlessSearchEngine(BaseSearchEngine):
@@ -196,15 +197,10 @@ class PaperlessSearchEngine(BaseSearchEngine):
             return query
 
         try:
-            prompt = f"""Paperless-ngx uses TF-IDF keyword search, not semantic search.
-Convert this query into keywords that would appear in documents.
-
-Query: "{query}"
-
-Output format: keyword1 OR keyword2 OR "multi word phrase" OR keyword3
-Include synonyms, plural forms, and technical terms.
-
-IMPORTANT: Output ONLY the search query. No explanations, no additional text."""
+            prompt = render_prompt(
+                "prompts.web_search_engines.engines.search_engine_paperless.paperlesssearchengine.expand_query_with_llm.prompt",
+                query=query,
+            )
 
             logger.debug(
                 f"Sending query expansion prompt to LLM for: '{query}'"

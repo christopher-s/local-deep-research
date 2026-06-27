@@ -16,6 +16,7 @@ from loguru import logger
 from ..candidates.base_candidate import Candidate
 from ..constraints.base_constraint import Constraint
 from ...utilities.json_utils import get_llm_response_text
+from local_deep_research.prompts import render_prompt
 
 
 class ExplorationStrategy(Enum):
@@ -194,15 +195,11 @@ class BaseCandidateExplorer(ABC):
         self, question: str, search_content: str
     ) -> list[str]:
         """Generate multiple answer candidates from search results."""
-        prompt = f"""
-Question: {question}
-
-Based on these search results, provide 3-5 possible answers:
-
-{search_content}
-
-Give me multiple possible answers, one per line:
-"""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.candidate_exploration.base_explorer.basecandidateexplorer.generate_answer_candidates.prompt",
+            question=question,
+            search_content=search_content,
+        )
 
         try:
             response = self.model.invoke(prompt)
@@ -231,20 +228,13 @@ Give me multiple possible answers, one per line:
         if not text.strip():
             return []
 
-        prompt = f"""
-Extract specific entity names from this text.
-{"Focus on: " + entity_type if entity_type else "Extract any named entities."}
-
-Text: {text[:500]}
-
-Return only the names, one per line. Be selective - only include clear, specific names.
-Do not include:
-- Generic terms or categories
-- Adjectives or descriptions
-- Common words
-
-Names:
-"""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.candidate_exploration.base_explorer.basecandidateexplorer.extract_entity_names.prompt",
+            conditional_2="Focus on: " + entity_type
+            if entity_type
+            else "Extract any named entities.",
+            text_excerpt=text[:500],
+        )
 
         try:
             response = get_llm_response_text(self.model.invoke(prompt))

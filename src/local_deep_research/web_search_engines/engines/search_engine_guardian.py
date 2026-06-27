@@ -8,6 +8,7 @@ from ...utilities.search_utilities import remove_think_tags
 from ...security.safe_requests import safe_get
 from ..rate_limiting import RateLimitError
 from ..search_engine_base import BaseSearchEngine
+from local_deep_research.prompts import render_prompt
 
 
 class GuardianSearchEngine(BaseSearchEngine):
@@ -113,27 +114,10 @@ class GuardianSearchEngine(BaseSearchEngine):
 
         try:
             # Prompt for query optimization
-            prompt = f"""Transform this natural language question into a very short Guardian news search query.
-
-Original query: "{query}"
-
-CRITICAL RULES:
-1. ONLY RETURN THE EXACT SEARCH QUERY - NO EXPLANATIONS, NO COMMENTS
-2. Keep it EXTREMELY BRIEF - MAXIMUM 3-4 words total
-3. Focus only on the main topic/person/event
-4. Include proper names when relevant
-5. Remove ALL unnecessary words
-6. DO NOT use Boolean operators (no AND/OR)
-7. DO NOT use quotes
-
-EXAMPLE CONVERSIONS:
-✓ "What's the impact of rising interest rates on UK housing market?" → "UK housing rates"
-✓ "Latest developments in the Ukraine-Russia peace negotiations" → "Ukraine Russia negotiations"
-✓ "How are tech companies responding to AI regulation?" → "tech AI regulation"
-✓ "What is Donald Trump's current political activity?" → "Trump political activity"
-
-Return ONLY the extremely brief search query.
-"""
+            prompt = render_prompt(
+                "prompts.web_search_engines.engines.search_engine_guardian.guardiansearchengine.optimize_query_for_guardian.prompt",
+                query=query,
+            )
 
             # Get response from LLM
             response = self.llm.invoke(prompt)
@@ -193,16 +177,10 @@ Return ONLY the extremely brief search query.
             return
 
         try:
-            prompt = f"""Is this query asking about HISTORICAL events or CURRENT events?
-
-Query: "{query}"
-
-ONE WORD ANSWER ONLY:
-- "HISTORICAL" if about past events (older than 1 year)
-- "CURRENT" if about recent events (within past year)
-- "UNCLEAR" if can't determine
-
-ONE WORD ONLY:"""
+            prompt = render_prompt(
+                "prompts.web_search_engines.engines.search_engine_guardian.guardiansearchengine.adapt_dates_for_query_type.prompt",
+                query=query,
+            )
 
             response = self.llm.invoke(prompt)
             answer = (

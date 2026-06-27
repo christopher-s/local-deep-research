@@ -11,6 +11,7 @@ from ...constants import USER_AGENT
 from ...security.safe_requests import safe_get
 from ...utilities.json_utils import extract_json, get_llm_response_text
 from ..search_engine_base import BaseSearchEngine
+from local_deep_research.prompts import render_prompt
 
 
 _VALID_SEARCH_TYPES = frozenset({"repositories", "code", "issues", "users"})
@@ -137,26 +138,10 @@ class GitHubSearchEngine(BaseSearchEngine):
                 logger.warning(f"Error getting LLM from config: {safe_msg}")
                 return query
 
-        prompt = f"""Transform this GitHub search query into an optimized version for the GitHub search API. Follow these steps:
-                        1. Strip question words (e.g., 'what', 'are', 'is'), stop words (e.g., 'and', 'as', 'of', 'on'), and redundant terms (e.g., 'repositories', 'repos', 'github') since they're implied by the search context.
-                        2. Keep only domain-specific keywords and avoid using "-related" terms.
-                        3. Add GitHub-specific filters with dynamic thresholds based on query context:
-                           - For stars: Use higher threshold (e.g., 'stars:>1000') for mainstream topics, lower (e.g., 'stars:>50') for specialized topics
-                           - For language: Detect programming language from query or omit if unclear
-                           - For search scope: Use 'in:name,description,readme' for general queries, 'in:file' for code-specific queries
-                        4. For date ranges, adapt based on query context:
-                           - For emerging: Use 'created:>2024-01-01'
-                           - For mature: Use 'pushed:>2023-01-01'
-                           - For historical research: Use 'created:2020-01-01..2024-01-01'
-                        5. For excluding results, adapt based on query:
-                           - Exclude irrelevant languages based on context
-                           - Use 'NOT' to exclude competing terms
-                        6. Ensure the output is a concise, space-separated string with no punctuation or extra text beyond keywords and filters.
-
-
-                        Original query: "{query}"
-
-                        Return ONLY the optimized query, ready for GitHub's search API. Do not include explanations or additional text."""
+        prompt = render_prompt(
+            "prompts.web_search_engines.engines.search_engine_github.githubsearchengine.optimize_github_query.prompt",
+            query=query,
+        )
 
         try:
             response = self.llm.invoke(prompt)
@@ -904,22 +889,11 @@ class GitHubSearchEngine(BaseSearchEngine):
             return previews
 
         # Create a specialized prompt for GitHub results
-        prompt = f"""Analyze these GitHub search results and rank them by relevance to the query.
-Consider:
-1. Repository stars and activity (higher is better)
-2. Match between query intent and repository description
-3. Repository language and topics
-4. Last update time (more recent is better)
-5. Whether it's a fork (original repositories are preferred)
-
-Query: "{query}"
-
-Results:
-{json.dumps(previews, indent=2)}
-
-Return ONLY a JSON array of indices in order of relevance (most relevant first).
-Example: [0, 2, 1, 3]
-Do not include any other text or explanation."""
+        prompt = render_prompt(
+            "prompts.web_search_engines.engines.search_engine_github.githubsearchengine.filter_for_relevance.prompt",
+            query=query,
+            dumps_4=json.dumps(previews, indent=2),
+        )
 
         try:
             response = self.llm.invoke(prompt)

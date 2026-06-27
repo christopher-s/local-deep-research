@@ -7,6 +7,7 @@ from loguru import logger
 from typing import Dict, List, Optional
 
 from .base_question import BaseQuestionGenerator
+from local_deep_research.prompts import render_prompt
 
 
 class AtomicFactQuestionGenerator(BaseQuestionGenerator):
@@ -53,28 +54,10 @@ class AtomicFactQuestionGenerator(BaseQuestionGenerator):
 
     def _decompose_to_atomic_facts(self, query: str) -> List[str]:
         """Decompose complex query into atomic, searchable facts."""
-        prompt = f"""Decompose this complex query into simple, atomic facts that can be searched independently.
-
-Query: {query}
-
-Break this down into individual facts that can be searched separately. Each fact should:
-1. Be about ONE thing only
-2. Be searchable on its own
-3. Not depend on other facts
-4. Use general terms (e.g., "body parts" not specific ones)
-
-For example, if the query is about a location with multiple criteria, create separate questions for:
-- The geographical/geological aspect
-- The naming aspect
-- The historical events
-- The statistical comparisons
-
-Return ONLY the questions, one per line.
-Example format:
-What locations were formed by glaciers?
-What geographic features are named after body parts?
-Where did falls occur between specific dates?
-"""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.questions.atomic_fact_question.atomicfactquestiongenerator.decompose_to_atomic_facts.prompt",
+            query=query,
+        )
 
         response = self.model.invoke(prompt)
 
@@ -110,41 +93,26 @@ Where did falls occur between specific dates?
 
         # Check if we have enough information to start reasoning
         if len(questions_by_iteration) >= 3:
-            prompt = f"""Based on the accumulated knowledge, generate questions that help connect the facts or fill remaining gaps.
-
-Original Query: {original_query}
-
-Current Knowledge:
-{current_knowledge}
-
-Previous Questions:
-{self._format_previous_questions(questions_by_iteration)}
-
-Generate {questions_per_iteration} questions that:
-1. Connect different facts you've found
-2. Fill specific gaps in knowledge
-3. Search for locations that match multiple criteria
-4. Verify specific details
-
-Return ONLY the questions, one per line.
-"""
+            prompt = render_prompt(
+                "prompts.advanced_search_system.questions.atomic_fact_question.atomicfactquestiongenerator.generate_gap_filling_questions.prompt",
+                original_query=original_query,
+                current_knowledge=current_knowledge,
+                format_previous_questions_6=self._format_previous_questions(
+                    questions_by_iteration
+                ),
+                questions_per_iteration=questions_per_iteration,
+            )
         else:
             # Still gathering basic facts
-            prompt = f"""Continue gathering atomic facts for this query.
-
-Original Query: {original_query}
-
-Previous Questions:
-{self._format_previous_questions(questions_by_iteration)}
-
-Current Knowledge:
-{current_knowledge}
-
-Generate {questions_per_iteration} more atomic fact questions that help build a complete picture.
-Focus on facts not yet explored.
-
-Return ONLY the questions, one per line.
-"""
+            prompt = render_prompt(
+                "prompts.advanced_search_system.questions.atomic_fact_question.atomicfactquestiongenerator.generate_gap_filling_questions.prompt_2",
+                original_query=original_query,
+                format_previous_questions_4=self._format_previous_questions(
+                    questions_by_iteration
+                ),
+                current_knowledge=current_knowledge,
+                questions_per_iteration=questions_per_iteration,
+            )
 
         response = self.model.invoke(prompt)
 

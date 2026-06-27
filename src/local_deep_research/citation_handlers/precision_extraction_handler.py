@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Union
 from loguru import logger
 
 from .base_citation_handler import BaseCitationHandler
+from local_deep_research.prompts import render_prompt
 
 
 class PrecisionExtractionHandler(BaseCitationHandler):
@@ -56,25 +57,14 @@ class PrecisionExtractionHandler(BaseCitationHandler):
 
         output_prefix = self._get_output_instruction_prefix()
 
-        prompt = f"""{output_prefix}Analyze the following information and provide a PRECISE answer to the question. Include citations using numbers in square brackets [1], [2], etc.
-
-Question: {query}
-Question Type: {question_type}
-
-Sources:
-{formatted_sources}
-
-Current time is {current_timestamp} UTC for verifying temporal references in sources.
-
-PRECISION INSTRUCTIONS:
-1. Extract the EXACT answer as it appears in the sources
-2. For names: Include FULL names with all parts (first, middle, last)
-3. For numbers: Include exact values with units if present
-4. For single-answer questions: Provide ONLY ONE answer, not multiple options
-5. For dimensions: Specify the exact measurement type (height, length, width)
-6. Citations should support the specific answer given
-
-Format: Start with the direct, precise answer, then explain with citations."""
+        prompt = render_prompt(
+            "prompts.citation_handlers.precision_extraction_handler.precisionextractionhandler.analyze_initial.prompt",
+            output_prefix=output_prefix,
+            query=query,
+            question_type=question_type,
+            formatted_sources=formatted_sources,
+            current_timestamp=current_timestamp,
+        )
 
         response = self._invoke_with_streaming(prompt)
 
@@ -109,27 +99,15 @@ Format: Start with the direct, precise answer, then explain with citations."""
 
         output_prefix = self._get_output_instruction_prefix()
 
-        prompt = f"""{output_prefix}Using the previous knowledge and new sources, provide a PRECISE answer to the question.
-
-Previous Key Facts:
-{key_facts}
-
-Question: {question}
-Question Type: {question_type}
-
-New Sources:
-{formatted_sources}
-
-Current time is {current_timestamp} UTC for verifying temporal references in sources.
-
-PRECISION REQUIREMENTS:
-1. Build on previous knowledge to provide the MOST COMPLETE answer
-2. If a full name was partially found before, complete it now
-3. If multiple candidates exist, select the one with the MOST evidence
-4. For measurements, ensure units and dimension types match the question
-5. Reconcile any conflicts by choosing the most frequently cited answer
-
-Provide the precise answer with citations. Do not create the bibliography, it will be provided automatically."""
+        prompt = render_prompt(
+            "prompts.citation_handlers.precision_extraction_handler.precisionextractionhandler.analyze_followup.prompt",
+            output_prefix=output_prefix,
+            key_facts=key_facts,
+            question=question,
+            question_type=question_type,
+            formatted_sources=formatted_sources,
+            current_timestamp=current_timestamp,
+        )
 
         content = self._invoke_with_streaming(prompt)
 
@@ -224,19 +202,12 @@ Provide the precise answer with citations. Do not create the bibliography, it wi
     def _extract_full_name(self, content: str, query: str, sources: str) -> str:
         """Extract complete full names."""
         # First, use LLM to identify all name variations
-        extraction_prompt = f"""Find ALL variations of the person's name mentioned in the sources.
-
-Question: {query}
-
-Content: {content[:2000]}
-Sources: {sources[:2000]}
-
-List all name variations found:
-1. Shortest version:
-2. Longest/most complete version:
-3. Most frequently mentioned version:
-
-Which is the FULL name (including middle name if present)?"""
+        extraction_prompt = render_prompt(
+            "prompts.citation_handlers.precision_extraction_handler.precisionextractionhandler.extract_full_name.extraction_prompt",
+            query=query,
+            content_excerpt=content[:2000],
+            sources_excerpt=sources[:2000],
+        )
 
         try:
             extraction = self._invoke_text(extraction_prompt)
@@ -290,17 +261,11 @@ Which is the FULL name (including middle name if present)?"""
         self, content: str, query: str, sources: str
     ) -> str:
         """Extract a single answer when multiple options might be present."""
-        extraction_prompt = f"""The question asks for ONE specific answer. Extract ONLY that answer.
-
-Question: {query}
-Content: {content[:1500]}
-
-Rules:
-1. If multiple items are listed, identify which ONE actually answers the question
-2. Look for the PRIMARY or FIRST mentioned item
-3. Do not include alternatives or additional options
-
-The single answer is:"""
+        extraction_prompt = render_prompt(
+            "prompts.citation_handlers.precision_extraction_handler.precisionextractionhandler.extract_single_answer.extraction_prompt",
+            query=query,
+            content_excerpt=content[:1500],
+        )
 
         try:
             answer = self._invoke_text(extraction_prompt)
@@ -351,22 +316,13 @@ The single answer is:"""
                 dimension_keywords = matching_keywords
                 break
 
-        extraction_prompt = f"""Extract the EXACT measurement that answers this question.
-
-Question: {query}
-Content: {content[:1500]}
-
-Rules:
-1. Find the specific {dimension_type or "dimension"} measurement
-2. Return ONLY the number and unit (e.g., "20 meters", "5.5 feet")
-3. Distinguish between different types of measurements:
-   - Height/tall: vertical measurements
-   - Length/long: horizontal distance
-   - Width/wide: horizontal breadth
-4. Look for context clues near the measurement
-5. If multiple measurements, choose the one that matches the question type
-
-The exact {dimension_type or "dimension"} is:"""
+        extraction_prompt = render_prompt(
+            "prompts.citation_handlers.precision_extraction_handler.precisionextractionhandler.extract_dimension.extraction_prompt",
+            query=query,
+            content_excerpt=content[:1500],
+            value_6=dimension_type or "dimension",
+            value_8=dimension_type or "dimension",
+        )
 
         try:
             answer = self._invoke_text(extraction_prompt)
@@ -474,13 +430,12 @@ The exact {dimension_type or "dimension"} is:"""
 
         if scores:
             # Use LLM to identify the correct score
-            extraction_prompt = f"""Which score/result answers this question?
-
-Question: {query}
-Found scores: {scores}
-Context: {content[:1000]}
-
-The answer is:"""
+            extraction_prompt = render_prompt(
+                "prompts.citation_handlers.precision_extraction_handler.precisionextractionhandler.extract_score.extraction_prompt",
+                query=query,
+                scores=scores,
+                content_excerpt=content[:1000],
+            )
 
             try:
                 answer = self._invoke_text(extraction_prompt)
@@ -504,13 +459,12 @@ The answer is:"""
 
         if years:
             # Use LLM to pick the right one
-            extraction_prompt = f"""Which date/year specifically answers this question?
-
-Question: {query}
-Found years: {set(years)}
-Context: {content[:1000]}
-
-The answer is:"""
+            extraction_prompt = render_prompt(
+                "prompts.citation_handlers.precision_extraction_handler.precisionextractionhandler.extract_temporal.extraction_prompt",
+                query=query,
+                set_4=set(years),
+                content_excerpt=content[:1000],
+            )
 
             try:
                 answer = self._invoke_text(extraction_prompt)
@@ -539,13 +493,12 @@ The answer is:"""
         )
 
         if numbers:
-            extraction_prompt = f"""Which number specifically answers this question?
-
-Question: {query}
-Found numbers: {numbers[:10]}
-Context: {content[:1000]}
-
-The answer is:"""
+            extraction_prompt = render_prompt(
+                "prompts.citation_handlers.precision_extraction_handler.precisionextractionhandler.extract_number.extraction_prompt",
+                query=query,
+                numbers_excerpt=numbers[:10],
+                content_excerpt=content[:1000],
+            )
 
             try:
                 answer = self._invoke_text(extraction_prompt)
@@ -585,11 +538,11 @@ The answer is:"""
         self, previous_knowledge: str, question_type: str
     ) -> str:
         """Extract key facts from previous knowledge."""
-        extraction_prompt = f"""Extract key facts related to a {question_type} question from this knowledge:
-
-{previous_knowledge[:1500]}
-
-List the most important facts (names, numbers, dates) found:"""
+        extraction_prompt = render_prompt(
+            "prompts.citation_handlers.precision_extraction_handler.precisionextractionhandler.extract_key_facts.extraction_prompt",
+            question_type=question_type,
+            previous_knowledge_excerpt=previous_knowledge[:1500],
+        )
 
         try:
             facts = self._invoke_text(extraction_prompt)

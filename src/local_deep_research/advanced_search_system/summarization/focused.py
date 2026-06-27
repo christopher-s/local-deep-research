@@ -2,6 +2,8 @@
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
+from local_deep_research.prompts import render_prompt
+
 from .base import BaseSummarizer
 
 
@@ -21,9 +23,9 @@ class FocusedSummarizer(BaseSummarizer):
         self.focus_query = focus_query
 
     def _build_prompt(self, content: str) -> str:
-        return (
-            f"Summarize the following text in {self.max_sentences} sentence(s), "
-            f"focusing on aspects relevant to: {self.focus_query!r}. "
-            "Return ONLY the summary text, no preamble or explanation.\n\n"
-            f"Text:\n{content}"
+        return render_prompt(
+            "prompts.advanced_search_system.summarization.focused",
+            max_sentences=self.max_sentences,
+            focus_query=repr(self.focus_query),
+            content=content,
         )

@@ -11,6 +11,7 @@ from ..findings.topic import Topic, TopicGraph
 from ..findings.repository import FindingsRepository
 from ...utilities.json_utils import extract_json, get_llm_response_text
 from ...utilities.thread_context import preserve_research_context
+from local_deep_research.prompts import render_prompt
 
 
 class TopicOrganizationStrategy(BaseSearchStrategy):
@@ -227,42 +228,31 @@ class TopicOrganizationStrategy(BaseSearchStrategy):
             current_topics = len(topics)
 
             # Create prompt for this specific source
-            source_prompt = f"""
-For the research query: "{query}"
-
-PROGRESS: Processing source {i + 1} of {total_sources} ({sources_remaining} remaining)
-
-TARGET DISTRIBUTION:
-- Total sources to organize: {total_sources}
-- Current topics: {current_topics}
-- Ideal balance: ~{ideal_topics} topics with ~{ideal_sources_per_topic} sources each
-- {"Too many topics - prefer adding to existing ones" if current_topics > ideal_topics else "Can create new topics if needed" if current_topics < ideal_topics else "Good balance - be selective"}
-
-GUIDELINES:
-- Aim for balanced distribution: ~{ideal_sources_per_topic} sources per topic
-- Prefer adding to existing topics when there's a clear thematic match
-- Only create a new topic if the source represents a distinctly different aspect
-- Consider: Topics with <{ideal_sources_per_topic // 2} sources need more sources; topics with >{ideal_sources_per_topic * 1.5:.0f} sources are getting full
-- Avoid overloading: If a topic has {ideal_sources_per_topic * 2}+ sources, consider if the new source might better start a related subtopic
-- Use "d" ONLY for sources that are COMPLETELY UNRELATED (e.g., wrong topic entirely, spam, or error pages). When in doubt, keep the source!
-
-CURRENT SOURCE TO CATEGORIZE:
-Title: {source.get("title", "Untitled")}
-URL: {source.get("link", "")}
-Snippet: {source.get("snippet", "")}
-
-EXISTING TOPICS (showing source count):
-{existing_topics_str}
-
-Respond with:
-- Use "-" to create a new topic
-- Use topic number (0-{len(topics) - 1}) to add to existing topic
-- Add "+" after the number if this source could be a better lead for that topic
-- Use "d" to delete ONLY if source is about a completely different subject (not just low relevance)
-
-Examples: 0, 2+, -, 1, 3+, d
-
-Response:"""
+            source_prompt = render_prompt(
+                "prompts.advanced_search_system.strategies.topic_organization_strategy.topicorganizationstrategy.extract_topics_from_sources.source_prompt",
+                query=query,
+                computed_4=i + 1,
+                total_sources=total_sources,
+                sources_remaining=sources_remaining,
+                total_sources_2=total_sources,
+                current_topics=current_topics,
+                ideal_topics=ideal_topics,
+                ideal_sources_per_topic=ideal_sources_per_topic,
+                conditional_18="Too many topics - prefer adding to existing ones"
+                if current_topics > ideal_topics
+                else "Can create new topics if needed"
+                if current_topics < ideal_topics
+                else "Good balance - be selective",
+                ideal_sources_per_topic_2=ideal_sources_per_topic,
+                computed_22=ideal_sources_per_topic // 2,
+                computed_24=format(ideal_sources_per_topic * 1.5, ".0f"),
+                computed_26=ideal_sources_per_topic * 2,
+                get_28=source.get("title", "Untitled"),
+                get_30=source.get("link", ""),
+                get_32=source.get("snippet", ""),
+                existing_topics_str=existing_topics_str,
+                computed_36=len(topics) - 1,
+            )
 
             # Debug log the full prompt for the first few sources and periodically
             if i < 3 or i % 50 == 0:
@@ -457,18 +447,15 @@ Response:"""
             sources_list.append(source_info)
 
         # Create minimal prompt for lead selection
-        selection_prompt = f"""
-Topic: {topic.title}
-
-Sources in this topic:
-{chr(10).join(sources_list)}
-
-Other topics (context):
-{chr(10).join(other_topic_context) if other_topic_context else "None"}
-
-Which source number (0-{len(all_sources) - 1}) should be the lead? (most comprehensive/representative)
-
-Response (just the number):"""
+        selection_prompt = render_prompt(
+            "prompts.advanced_search_system.strategies.topic_organization_strategy.topicorganizationstrategy.reselect_lead_for_single_topic.selection_prompt",
+            topic_title=topic.title,
+            join_4=chr(10).join(sources_list),
+            conditional_6=chr(10).join(other_topic_context)
+            if other_topic_context
+            else "None",
+            computed_8=len(all_sources) - 1,
+        )
 
         try:
             response = self.model.invoke(selection_prompt)
@@ -556,26 +543,15 @@ Response (just the number):"""
                 )
 
             # 3. Create relevance evaluation prompt
-            relevance_prompt = f"""
-Evaluate if this topic is relevant for answering the research question.
-
-RESEARCH QUESTION: {query}
-
-CURRENT TOPIC: {topic.title}
-Sources in this topic:
-{chr(10).join(topic_sources)}
-
-OTHER TOPICS IDENTIFIED (for context):
-{chr(10).join(other_topic_leads) if other_topic_leads else "None"}
-
-Does this topic contain information that helps answer the research question?
-Consider:
-- Does it address the main question or important sub-questions?
-- Does it provide necessary background or context?
-- Does it offer evidence, examples, or explanations relevant to the query?
-
-Respond with only "yes" or "no".
-"""
+            relevance_prompt = render_prompt(
+                "prompts.advanced_search_system.strategies.topic_organization_strategy.topicorganizationstrategy.filter_topics_by_relevance.relevance_prompt",
+                query=query,
+                topic_title=topic.title,
+                join_6=chr(10).join(topic_sources),
+                conditional_8=chr(10).join(other_topic_leads)
+                if other_topic_leads
+                else "None",
+            )
 
             try:
                 # Call model directly with prompt
@@ -640,21 +616,15 @@ Respond with only "yes" or "no".
                 topic_sources.append(source_info)
 
             # Prompt to select best lead
-            selection_prompt = f"""
-Select the best lead source for this topic cluster.
-
-TOPIC: {topic.title}
-Current sources in this topic:
-{chr(10).join(topic_sources)}
-
-OTHER TOPICS (for context):
-{chr(10).join(other_leads) if other_leads else "None"}
-
-Which source number (0-{len(all_sources) - 1}) should be the lead source for this topic?
-The lead should be the most comprehensive and representative source.
-
-Respond with only the number.
-"""
+            selection_prompt = render_prompt(
+                "prompts.advanced_search_system.strategies.topic_organization_strategy.topicorganizationstrategy.reselect_lead_sources.selection_prompt",
+                topic_title=topic.title,
+                join_4=chr(10).join(topic_sources),
+                conditional_6=chr(10).join(other_leads)
+                if other_leads
+                else "None",
+                computed_8=len(all_sources) - 1,
+            )
 
             try:
                 response = self.model.invoke(selection_prompt)
@@ -727,30 +697,15 @@ Respond with only the number.
                 continue
 
             # Build prompt for reorganization
-            reorganize_prompt = f"""
-Evaluate which topic each source belongs to based on the lead sources.
-
-CURRENT TOPIC {i}: {topic.title}
-
-ALL TOPIC LEADS:
-{chr(10).join(all_leads)}
-
-SOURCES TO EVALUATE FROM TOPIC {i}:
-{chr(10).join([s["info"] for s in sources_to_evaluate])}
-
-For each source, determine:
-1. Which topic index (0-{len(topics) - 1}) it best fits with
-2. Or -1 if it should form a new topic
-3. Or -2 if it should be removed (not relevant)
-
-Format as JSON list:
-[
-  {{"source_index": 0, "target_topic": 1}},
-  {{"source_index": 1, "target_topic": -1}},
-]
-
-Consider similarity to lead sources when deciding.
-"""
+            reorganize_prompt = render_prompt(
+                "prompts.advanced_search_system.strategies.topic_organization_strategy.topicorganizationstrategy.reorganize_topics.reorganize_prompt",
+                i=i,
+                topic_title=topic.title,
+                join_6=chr(10).join(all_leads),
+                i_2=i,
+                join_10=chr(10).join([s["info"] for s in sources_to_evaluate]),
+                computed_12=len(topics) - 1,
+            )
 
             try:
                 response = self.model.invoke(reorganize_prompt)
@@ -877,33 +832,12 @@ Consider similarity to lead sources when deciding.
             else "None"
         )
 
-        refinement_prompt = f"""
-Based on the current research state, generate ONE follow-up question to improve confidence in answering the original query.
-
-ORIGINAL QUERY: {original_query}
-
-CURRENT TOPICS FOUND:
-{chr(10).join(topic_summary)}
-
-PREVIOUS REFINEMENT QUESTIONS ASKED:
-{prev_questions_str}
-
-CRITICAL: The follow-up question must stay focused on answering the ORIGINAL QUERY above.
-
-Analyze what specific aspects of the original query are NOT well covered by current topics.
-The refinement should fill gaps that directly help answer the original question better.
-
-Generate a short, specific follow-up question that:
-1. MUST directly relate to the ORIGINAL QUERY (not tangential topics)
-2. Fills a specific gap in answering the original query
-3. Is different from previous questions
-4. Stays within the scope of the original query
-5. Is concise and searchable (max 15 words)
-
-If the current topics comprehensively answer ALL aspects of the original query, respond with "NONE".
-
-Otherwise, respond with only the follow-up question, nothing else.
-"""
+        refinement_prompt = render_prompt(
+            "prompts.advanced_search_system.strategies.topic_organization_strategy.topicorganizationstrategy.generate_refinement_question.refinement_prompt",
+            original_query=original_query,
+            join_4=chr(10).join(topic_summary),
+            prev_questions_str=prev_questions_str,
+        )
 
         try:
             response = self.model.invoke(refinement_prompt)
@@ -1635,24 +1569,15 @@ Otherwise, respond with only the follow-up question, nothing else.
                 topic_documents
             )
 
-            topic_prompt = f"""CURRENT TOPIC: {topic.title}
-SOURCE SNIPPETS FOR THIS TOPIC (partial content):
-{formatted_topic_sources}
-
-OTHER TOPICS BEING COVERED (for context - avoid repeating):
-{chr(10).join(other_leads_info) if other_leads_info else "None"}
-
-Write a SHORT paragraph (2-3 sentences) based on these SNIPPETS that:
-1. DIRECTLY ANSWERS aspects of the research question using this topic's sources
-2. Focuses on what's UNIQUE about this topic's contribution
-3. Works with the partial information available in the snippets
-4. Uses citations for claims found in the snippets
-5. Acknowledges if key details are not in the snippets but describes what the sources appear to cover
-
-Stay anchored to the research question and highlight this topic's specific insights.
-Remember: These are snippets, not full articles.
-
-RESEARCH QUESTION TO ANSWER: {query}"""
+            topic_prompt = render_prompt(
+                "prompts.advanced_search_system.strategies.topic_organization_strategy.topicorganizationstrategy.generate_topic_based_text.topic_prompt",
+                topic_title=topic.title,
+                formatted_topic_sources=formatted_topic_sources,
+                conditional_6=chr(10).join(other_leads_info)
+                if other_leads_info
+                else "None",
+                query=query,
+            )
 
             try:
                 topic_response = self.model.invoke(topic_prompt)
@@ -1686,21 +1611,12 @@ RESEARCH QUESTION TO ANSWER: {query}"""
                 lead_documents
             )
 
-            summary_prompt = f"""SOURCE SNIPPETS (for citation reference):
-{formatted_lead_sources}
-
-TOPIC SECTIONS ALREADY GENERATED:
-{chr(10).join(topic_sections)}
-
-Based on the topic sections above, write ONE comprehensive introductory paragraph that:
-1. DIRECTLY ANSWERS the research question by synthesizing insights from ALL topic sections
-2. Focuses on the main answer to the question first
-3. Integrates key findings from the different topics into a coherent response
-4. Uses citations [1], [2], etc. for specific claims
-
-IMPORTANT: Focus on ANSWERING THE QUESTION directly using the information from the topic sections.
-
-RESEARCH QUESTION TO ANSWER: {query}"""
+            summary_prompt = render_prompt(
+                "prompts.advanced_search_system.strategies.topic_organization_strategy.topicorganizationstrategy.generate_topic_based_text.summary_prompt",
+                formatted_lead_sources=formatted_lead_sources,
+                join_4=chr(10).join(topic_sections),
+                query=query,
+            )
 
             try:
                 summary_response = self.model.invoke(summary_prompt)

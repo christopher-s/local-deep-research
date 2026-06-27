@@ -5,6 +5,7 @@ from loguru import logger
 
 from .base_question import BaseQuestionGenerator
 from ...utilities.json_utils import get_llm_response_text
+from local_deep_research.prompts import render_prompt
 
 
 class DecompositionQuestionGenerator(BaseQuestionGenerator):
@@ -105,25 +106,12 @@ class DecompositionQuestionGenerator(BaseQuestionGenerator):
         )
 
         # Create a prompt to decompose the query into sub-questions
-        prompt = f"""Decompose the main research topic into 3-5 specific sub-queries that can be answered independently.
-Focus on breaking down complex concepts and identifying key aspects requiring separate investigation.
-Ensure sub-queries are clear, targeted, and help build a comprehensive understanding.
-
-Main Research Topic: {subject}
-Original Query: {query}
-
-Context Information:
-{context[:2000]}  # Limit context length to prevent token limit issues
-
-Your task is to create 3-5 specific questions that will help thoroughly research this topic.
-If the original query is already a question, extract the core subject and formulate questions around that subject.
-
-Return ONLY the sub-queries, one per line, without numbering or bullet points.
-Example format:
-What is X technology?
-How does X compare to Y?
-What are the security implications of X?
-"""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.questions.decomposition_question.decompositionquestiongenerator.generate_questions.prompt",
+            subject=subject,
+            query=query,
+            context_excerpt=context[:2000],
+        )
 
         logger.info(
             f"Generating sub-questions for query: '{query}', subject: '{subject}'"
@@ -234,18 +222,11 @@ What are the security implications of X?
                             topic_text = topic_text[len(article) :].strip()
 
                 # Simpler prompt
-                simple_prompt = f"""Break down this research topic into 3 simpler sub-questions:
-
-Research Topic: {topic_text}
-Original Query: {query}
-
-Your task is to create 3 specific questions that will help thoroughly research this topic.
-If the original query is already a question, use the core subject of that question.
-
-Sub-questions:
-1.
-2.
-3. """
+                simple_prompt = render_prompt(
+                    "prompts.advanced_search_system.questions.decomposition_question.decompositionquestiongenerator.generate_questions.simple_prompt",
+                    topic_text=topic_text,
+                    query=query,
+                )
 
                 simple_response = self.model.invoke(simple_prompt)
 

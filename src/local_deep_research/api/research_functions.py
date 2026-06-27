@@ -17,6 +17,7 @@ from ..search_system import AdvancedSearchSystem
 from ..utilities.db_utils import no_db_settings
 from ..utilities.thread_context import clear_search_context, set_search_context
 from .settings_utils import create_settings_snapshot
+from local_deep_research.prompts import render_prompt
 
 
 def _close_system(system):
@@ -709,12 +710,11 @@ def analyze_documents(
             ]
         )  # Limit to first 5 docs and 1000 chars each
 
-        summary_prompt = f"""Analyze these document excerpts related to the query: "{query}"
-
-        {docs_text}
-
-        Provide a concise summary of the key information found in these documents related to the query.
-        """
+        summary_prompt = render_prompt(
+            "prompts.api.research_functions.analyze_documents.summary_prompt",
+            query=query,
+            docs_text=docs_text,
+        )
 
         import time
 

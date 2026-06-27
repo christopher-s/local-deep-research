@@ -18,6 +18,7 @@ from .base_explorer import (
     ExplorationResult,
     ExplorationStrategy,
 )
+from local_deep_research.prompts import render_prompt
 
 
 class AdaptiveExplorer(BaseCandidateExplorer):
@@ -239,12 +240,10 @@ class AdaptiveExplorer(BaseCandidateExplorer):
 
     def _synonym_expansion_query(self, base_query: str) -> Optional[str]:
         """Generate query with synonym expansion."""
-        prompt = f"""
-Generate a search query that means the same as "{base_query}" but uses different words.
-Focus on synonyms and alternative terminology.
-
-Query:
-"""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.candidate_exploration.adaptive_explorer.adaptiveexplorer.synonym_expansion_query.prompt",
+            base_query=base_query,
+        )
 
         try:
             response = self.model.invoke(prompt).content.strip()
@@ -269,11 +268,10 @@ Query:
         self, base_query: str, found_candidates: List[Candidate]
     ) -> Optional[str]:
         """Generate query using related terms."""
-        prompt = f"""
-Given the search topic "{base_query}", suggest a related search term that would find similar but different examples.
-
-Related search term:
-"""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.candidate_exploration.adaptive_explorer.adaptiveexplorer.related_terms_query.prompt",
+            base_query=base_query,
+        )
 
         try:
             response = self.model.invoke(prompt).content.strip()

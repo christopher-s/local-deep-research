@@ -11,6 +11,7 @@ from .base_strategy import BaseSearchStrategy
 from ..questions.news_question import NewsQuestionGenerator
 from ...database.thread_local_session import thread_cleanup
 from ...utilities.json_utils import extract_json
+from local_deep_research.prompts import render_prompt
 
 
 class NewsAggregationStrategy(BaseSearchStrategy):
@@ -108,42 +109,11 @@ class NewsAggregationStrategy(BaseSearchStrategy):
             ]
         )
 
-        return f"""
-Analyze these news snippets from search results and create a structured news report.
-Today's date: {datetime.now(UTC).strftime("%B %d, %Y")}
-
-{snippet_text}
-
-Create a structured JSON response with the 10 most important news stories:
-{{
-    "news_items": [
-        {{
-            "headline": "8 words max describing the story",
-            "category": "War/Security/Economy/Tech/Politics/Health/Environment/Other",
-            "source_url": "url from snippets",
-            "source_id": "[number] from above",
-            "summary": "3 clear sentences about what happened",
-            "analysis": "Why this matters and what happens next (2 sentences)",
-            "impact_score": 1-10,
-            "entities": {{"people": ["names"], "places": ["locations"], "orgs": ["organizations"]}},
-            "topics": ["topic1", "topic2"],
-            "time_ago": "estimated time (2 hours ago, yesterday, etc)",
-            "is_developing": true/false,
-            "surprising_element": "what makes this unexpected or notable (if any)"
-        }}
-    ]
-}}
-
-PRIORITIZE:
-1. Stories with casualties or significant human impact
-2. Economic impacts over $1 billion
-3. Major political or diplomatic developments
-4. Unexpected or surprising events
-5. Breaking developments from the last 24 hours
-
-Only include stories that are truly newsworthy and significant.
-Ensure variety across different categories when possible.
-"""
+        return render_prompt(
+            "prompts.advanced_search_system.strategies.news_strategy.analysis",
+            current_date=datetime.now(UTC).strftime("%B %d, %Y"),
+            snippets=snippet_text,
+        )
 
     def _extract_json_from_response(self, content: str) -> Optional[Dict]:
         """Extract JSON from LLM response"""

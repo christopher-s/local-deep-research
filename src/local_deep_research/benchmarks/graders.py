@@ -14,7 +14,11 @@ from langchain_core.messages.human import HumanMessage
 
 from ..config.llm_config import get_llm
 from ..llm.providers.base import normalize_provider
-from .templates import BROWSECOMP_GRADER_TEMPLATE, SIMPLEQA_GRADER_TEMPLATE
+from ..prompts import render_prompt
+from .templates import (
+    BROWSECOMP_GRADER_PROMPT_KEY,
+    SIMPLEQA_GRADER_PROMPT_KEY,
+)
 
 
 # Default evaluation configuration using Claude 3.7 Sonnet via OpenRouter
@@ -166,11 +170,10 @@ def grade_single_result(
     evaluation_llm = get_evaluation_llm(evaluation_config, settings_snapshot)
 
     try:
-        # Select appropriate template
-        template = (
-            BROWSECOMP_GRADER_TEMPLATE
+        prompt_key = (
+            BROWSECOMP_GRADER_PROMPT_KEY
             if dataset_type.lower() == "browsecomp"
-            else SIMPLEQA_GRADER_TEMPLATE
+            else SIMPLEQA_GRADER_PROMPT_KEY
         )
 
         question = result_data.get("problem", "")
@@ -179,9 +182,12 @@ def grade_single_result(
 
         logger.info(f"Grading single result: {question[:50]}...")
 
-        # Format grading prompt
-        grading_prompt = template.format(
-            question=question, correct_answer=correct_answer, response=response
+        grading_prompt = render_prompt(
+            prompt_key,
+            settings_snapshot=settings_snapshot,
+            question=question,
+            correct_answer=correct_answer,
+            response=response,
         )
 
         import time
@@ -337,6 +343,7 @@ def grade_results(
             output_file,
             dataset_type,
             progress_callback,
+            settings_snapshot,
         )
     finally:
         from ..utilities.resource_utils import safe_close
@@ -350,13 +357,13 @@ def _grade_results_inner(
     output_file: str,
     dataset_type: str,
     progress_callback: Optional[Callable[[int, int, Dict], None]],
+    settings_snapshot: Optional[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
     """Inner implementation of grade_results, separated for cleanup."""
-    # Select appropriate template
-    template = (
-        BROWSECOMP_GRADER_TEMPLATE
+    prompt_key = (
+        BROWSECOMP_GRADER_PROMPT_KEY
         if dataset_type.lower() == "browsecomp"
-        else SIMPLEQA_GRADER_TEMPLATE
+        else SIMPLEQA_GRADER_PROMPT_KEY
     )
 
     # Load results
@@ -390,9 +397,12 @@ def _grade_results_inner(
 
         logger.info(f"Grading {idx + 1}/{len(results)}: {question[:50]}...")
 
-        # Format grading prompt
-        grading_prompt = template.format(
-            question=question, correct_answer=correct_answer, response=response
+        grading_prompt = render_prompt(
+            prompt_key,
+            settings_snapshot=settings_snapshot,
+            question=question,
+            correct_answer=correct_answer,
+            response=response,
         )
 
         try:

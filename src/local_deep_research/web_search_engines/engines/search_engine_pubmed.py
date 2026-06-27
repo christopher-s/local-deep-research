@@ -10,6 +10,7 @@ from ...constants import SNIPPET_LENGTH_LONG
 from ...security.safe_requests import safe_get
 from ..rate_limiting import RateLimitError
 from ..search_engine_base import BaseSearchEngine
+from local_deep_research.prompts import render_prompt
 
 
 class PubMedSearchEngine(BaseSearchEngine):
@@ -244,28 +245,10 @@ class PubMedSearchEngine(BaseSearchEngine):
 
         try:
             # Prompt for query optimization
-            prompt = f"""Transform this natural language question into an optimized PubMed search query.
-
-Original query: "{query}"
-
-CRITICAL RULES:
-1. ONLY RETURN THE EXACT SEARCH QUERY - NO EXPLANATIONS, NO COMMENTS
-2. DO NOT wrap the entire query in quotes
-3. DO NOT include ANY date restrictions or year filters
-4. Use parentheses around OR statements: (term1[Field] OR term2[Field])
-5. Use only BASIC MeSH terms - stick to broad categories like "Vaccines"[Mesh]
-6. KEEP IT SIMPLE - use 2-3 main concepts maximum
-7. Focus on Title/Abstract searches for reliability: term[Title/Abstract]
-8. Use wildcards for variations: vaccin*[Title/Abstract]
-
-EXAMPLE QUERIES:
-✓ GOOD: (mRNA[Title/Abstract] OR "messenger RNA"[Title/Abstract]) AND vaccin*[Title/Abstract]
-✓ GOOD: (influenza[Title/Abstract] OR flu[Title/Abstract]) AND treatment[Title/Abstract]
-✗ BAD: (mRNA[Title/Abstract]) AND "specific disease"[Mesh] AND treatment[Title/Abstract] AND 2023[dp]
-✗ BAD: "Here's a query to find articles about vaccines..."
-
-Return ONLY the search query without any explanations.
-"""
+            prompt = render_prompt(
+                "prompts.web_search_engines.engines.search_engine_pubmed.pubmedsearchengine.optimize_query_for_pubmed.prompt",
+                query=query,
+            )
 
             # Get response from LLM
             response = self.llm.invoke(prompt)
@@ -482,15 +465,10 @@ Return ONLY the search query without any explanations.
 
         try:
             # Use LLM to determine if the query is focused on historical information
-            prompt = f"""Determine if this query is specifically asking for HISTORICAL or OLDER information.
-
-Query: "{query}"
-
-Answer ONLY "yes" if the query is clearly asking for historical, early, original, or past information from more than 5 years ago.
-Answer ONLY "no" if the query is asking about recent, current, or new information, or if it's a general query without a specific time focus.
-
-The default assumption should be that medical and scientific queries want RECENT information unless clearly specified otherwise.
-"""
+            prompt = render_prompt(
+                "prompts.web_search_engines.engines.search_engine_pubmed.pubmedsearchengine.is_historical_focused.prompt",
+                query=query,
+            )
 
             response = self.llm.invoke(prompt)
             answer = (

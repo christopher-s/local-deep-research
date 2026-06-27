@@ -57,6 +57,7 @@ from ...utilities.thread_context import get_search_context
 from ...web_search_engines.search_engine_factory import create_search_engine
 from .base_filter import BaseFilter
 from ...constants import DEFAULT_SEARCH_TOOL
+from local_deep_research.prompts import render_prompt
 
 
 # Patterns that indicate a venue is a conference, not a journal.
@@ -669,12 +670,9 @@ class JournalReputationFilter(BaseFilter):
             A canonicalised name from the LLM, or ``None`` if the call
             failed or the response was empty.
         """
-        prompt = (
-            f"Clean up the following journal or conference name:\n\n"
-            f'"{journal_name}"\n\n'
-            "Remove any references to volumes, pages, months, or years. "
-            "Expand common abbreviations. For conferences, remove "
-            "locations. Output only the clean name, no explanation."
+        prompt = render_prompt(
+            "prompts.advanced_search_system.filters.journal_reputation_filter.journalreputationfilter.llm_clean_journal_name.prompt",
+            journal_name=journal_name,
         )
         try:
             response = self.model.invoke(prompt)
@@ -754,20 +752,11 @@ class JournalReputationFilter(BaseFilter):
         # original prompt — earlier code review flagged that arbitrary
         # rewrites of this prompt have a real chance of regressing the
         # Q1/Q2/Q3 calibration the rest of the code depends on.
-        prompt = f"""
-You are a research assistant helping to assess the reliability and
-reputability of scientific journals. A reputable journal should be
-peer-reviewed, not predatory, and high-impact. Please review the
-following information on the journal "{journal_name}" and output a
-reputability score between 1 and 10, where 1-3 is not reputable and
-probably predatory, 4-6 is reputable but low-impact (Q2 or Q3),
-and 7-10 is reputable Q1 journals. Only output the number, do not
-provide any explanation or other output.
-
-JOURNAL INFORMATION:
-
-{journal_info_text}
-"""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.filters.journal_reputation_filter.journalreputationfilter.analyze_journal_reputation.prompt",
+            journal_name=journal_name,
+            journal_info_text=journal_info_text,
+        )
 
         response = self.model.invoke(prompt).content
         logger.debug(f"Tier 4 LLM response for '{journal_name}': {response}")

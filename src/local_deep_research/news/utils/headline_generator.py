@@ -5,6 +5,7 @@ Uses LLM to generate concise, meaningful headlines from long queries and finding
 
 from typing import Optional
 from loguru import logger
+from local_deep_research.prompts import render_prompt
 
 
 def generate_headline(
@@ -65,22 +66,10 @@ def _generate_with_llm(
                 f"Generating headline with {len(findings)} chars of findings"
             )
 
-            prompt = f"""Generate a comprehensive news headline that captures the key events from the research report below.
-
-Research Findings:
-{findings_preview}
-
-Requirements:
-- Include MULTIPLE major events if several important things happened (e.g., "Earthquake Strikes California While Wildfires Rage; Global Markets Tumble Amid Political Tensions")
-- Capture as much important information as possible in the headline
-- Be specific about locations, impacts, and key details
-- Professional news headline style but can be longer to include more information
-- Focus on the most impactful findings from the report
-- Use semicolons or commas to separate multiple major events
-- No quotes or punctuation at start/end
-- Base the headline ONLY on the actual findings in the report
-
-Generate only the headline text, nothing else."""
+            prompt = render_prompt(
+                "prompts.news.utils.headline_generator.generate_with_llm.prompt",
+                findings_preview=findings_preview,
+            )
 
             response = llm.invoke(prompt)
             headline: str = str(response.content).strip()

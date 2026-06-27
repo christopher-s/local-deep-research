@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Union
 
 from .base_citation_handler import BaseCitationHandler
+from local_deep_research.prompts import render_prompt
 
 
 class StandardCitationHandler(BaseCitationHandler):
@@ -24,17 +25,13 @@ class StandardCitationHandler(BaseCitationHandler):
 
         output_prefix = self._get_output_instruction_prefix()
 
-        prompt = f"""{output_prefix}Analyze the following information concerning the question and include citations using numbers in square brackets [1], [2], etc. When citing, use the source number provided at the start of each source.
-
-Question: {query}
-
-Sources:
-{formatted_sources}
-
-Current time is {current_timestamp} UTC for verifying temporal references in sources.
-
-Provide a detailed analysis with citations. Do not create the bibliography, it will be provided automatically.  Never make up sources. Never write or create urls. Only write text relevant to the question. Example format: "According to the research [1], ..."
-"""
+        prompt = render_prompt(
+            "prompts.citation_handlers.standard_citation_handler.standardcitationhandler.analyze_initial.prompt",
+            output_prefix=output_prefix,
+            query=query,
+            formatted_sources=formatted_sources,
+            current_timestamp=current_timestamp,
+        )
 
         response = self._invoke_with_streaming(prompt)
         return {"content": response, "documents": documents}
@@ -56,19 +53,11 @@ Provide a detailed analysis with citations. Do not create the bibliography, it w
             return self._no_sources_response(question)
         formatted_sources = self._format_sources(documents)
         # Add fact-checking step
-        fact_check_prompt = f"""Analyze these sources for factual consistency:
-1. Cross-reference major claims between sources
-2. Identify and flag any contradictions
-3. Verify basic facts (dates, company names, ownership)
-4. Note when sources disagree
-
-Previous Knowledge:
-{previous_knowledge}
-
-New Sources:
-{formatted_sources}
-
-        Return any inconsistencies or conflicts found."""
+        fact_check_prompt = render_prompt(
+            "prompts.citation_handlers.standard_citation_handler.standardcitationhandler.analyze_followup.fact_check_prompt",
+            previous_knowledge=previous_knowledge,
+            formatted_sources=formatted_sources,
+        )
         if self.is_fact_checking_enabled():
             fact_check_response = self._invoke_text(fact_check_prompt)
         else:
@@ -80,20 +69,15 @@ New Sources:
 
         output_prefix = self._get_output_instruction_prefix()
 
-        prompt = f"""{output_prefix}Using the previous knowledge and new sources, answer the question. Include citations using numbers in square brackets [1], [2], etc. When citing, use the source number provided at the start of each source. Reflect information from sources critically.
-
-Previous Knowledge:
-{previous_knowledge}
-
-Question: {question}
-
-New Sources:
-{formatted_sources}
-
-Current time is {current_timestamp} UTC for verifying temporal references in sources.
-
-Reflect information from sources critically based on: {fact_check_response}. Never invent sources.
-Provide a detailed answer with citations. Do not create the bibliography, it will be provided automatically. Example format: "According to [1], ..." """
+        prompt = render_prompt(
+            "prompts.citation_handlers.standard_citation_handler.standardcitationhandler.analyze_followup.prompt",
+            output_prefix=output_prefix,
+            previous_knowledge=previous_knowledge,
+            question=question,
+            formatted_sources=formatted_sources,
+            current_timestamp=current_timestamp,
+            fact_check_response=fact_check_response,
+        )
 
         response = self._invoke_with_streaming(prompt)
 

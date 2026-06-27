@@ -41,6 +41,7 @@ from loguru import logger
 from langchain_ollama import ChatOllama
 
 from ..config.constants import DEFAULT_MAX_FILTERED_RESULTS
+from ..prompts import render_prompt
 
 # Real wrapper chains (RateLimitedLLMWrapper -> ProcessingLLMWrapper -> base)
 # are at most 2-3 levels deep. A depth limit avoids spurious infinite chains
@@ -80,18 +81,7 @@ _FILTER_WALL_TIMEOUT_S = 300.0
 _SNIPPET_CHAR_CAP = 800
 
 
-_RELEVANCE_PROMPT_TEMPLATE = """This is a relevance-filtering step. Kept results move forward and may be used in the final answer; dropped ones are excluded from further processing.
-
-Query: "{query}"
-Current date: {current_date}
-
-Search results:
-{preview_text}
-
-Direct topic match matters more than keyword match — results that just mention the query terms usually don't help.
-
-Output ONLY the 0-based indices of relevant results as a comma-separated list, nothing else.
-Example: 0, 2, 5"""  # noqa: S608
+_RELEVANCE_PROMPT_KEY = "prompts.web_search_engines.relevance_filter"
 
 
 def _unwrap_llm(llm):
@@ -114,7 +104,7 @@ def _build_batch_prompt(
     query: str,
     batch: List[Dict[str, Any]],
     total_in_full: int,
-    prompt_template: str,
+    prompt_template: Optional[str],
 ) -> str:
     """Build the relevance prompt for a single batch of previews.
 
@@ -133,10 +123,18 @@ def _build_batch_prompt(
             snippet = snippet[:_SNIPPET_CHAR_CAP] + "..."
         preview_lines.append(f"[{i}] {title}\n    {snippet}")
 
-    return prompt_template.format(
-        query=query,
-        current_date=datetime.now(UTC).strftime("%Y-%m-%d"),
-        preview_text="\n\n".join(preview_lines),
+    values = {
+        "query": query,
+        "current_date": datetime.now(UTC).strftime("%Y-%m-%d"),
+        "preview_text": "\n\n".join(preview_lines),
+    }
+    if prompt_template is not None:
+        return prompt_template.format(**values)
+    return render_prompt(
+        _RELEVANCE_PROMPT_KEY,
+        query=values["query"],
+        current_date=values["current_date"],
+        preview_text=values["preview_text"],
     )
 
 
@@ -146,7 +144,7 @@ def _run_batch(
     query: str,
     total_in_full: int,
     engine_name: str,
-    prompt_template: str,
+    prompt_template: Optional[str],
 ) -> List[int]:
     """Invoke the LLM on a single batch and return the parsed local indices.
 
@@ -194,8 +192,6 @@ def filter_previews_for_relevance(
         Filtered list of preview dicts (subset of input). Order matches
         the original preview order across batches.
     """
-    if prompt_template is None:
-        prompt_template = _RELEVANCE_PROMPT_TEMPLATE
     if not previews:
         return []
 

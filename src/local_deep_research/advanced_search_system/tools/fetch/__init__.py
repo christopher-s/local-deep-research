@@ -39,8 +39,12 @@ from local_deep_research.security import (
     redact_url_for_log,
     sanitize_error_for_client,
 )
+from local_deep_research.prompts import render_prompt
 
-from .prompts import SUMMARY_FOCUS_PROMPT, SUMMARY_FOCUS_QUERY_PROMPT
+from .prompts import (
+    SUMMARY_FOCUS_PROMPT_KEY,
+    SUMMARY_FOCUS_QUERY_PROMPT_KEY,
+)
 
 
 # Per-call timeouts and caps. Kept here rather than in the strategy file
@@ -211,7 +215,11 @@ def _make_summary_fetch_tool(
     overall_query=str  → focus + overall-query prompt (``summary_focus_query``).
     """
     use_query = bool(overall_query)
-    template = SUMMARY_FOCUS_QUERY_PROMPT if use_query else SUMMARY_FOCUS_PROMPT
+    prompt_key = (
+        SUMMARY_FOCUS_QUERY_PROMPT_KEY
+        if use_query
+        else SUMMARY_FOCUS_PROMPT_KEY
+    )
 
     mode_label = "summary_focus_query" if use_query else "summary_focus"
 
@@ -266,15 +274,15 @@ def _make_summary_fetch_tool(
                     )
                     return f"NOT RELEVANT (no extractable content at {url})"
 
-                fmt_kwargs = {
-                    "focus": focus,
-                    "title": title,
-                    "url": url,
-                    "content": content,
-                }
-                if use_query:
-                    fmt_kwargs["overall_query"] = overall_query
-                prompt = template.format(**fmt_kwargs)
+                prompt = render_prompt(
+                    prompt_key,
+                    settings_snapshot=settings_snapshot,
+                    overall_query=overall_query or "",
+                    focus=focus,
+                    title=title,
+                    url=url,
+                    content=content,
+                )
 
                 try:
                     summary_msg = model.invoke(prompt)

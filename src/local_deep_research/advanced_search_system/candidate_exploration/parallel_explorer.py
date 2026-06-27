@@ -19,6 +19,7 @@ from .base_explorer import (
     ExplorationResult,
     ExplorationStrategy,
 )
+from local_deep_research.prompts import render_prompt
 
 
 class ParallelExplorer(BaseCandidateExplorer):
@@ -190,20 +191,10 @@ class ParallelExplorer(BaseCandidateExplorer):
     def _generate_query_variations(self, base_query: str) -> List[str]:
         """Generate variations of the base query."""
         try:
-            prompt = f"""
-Generate 4 search query variations for: "{base_query}"
-
-Each variation should:
-1. Use different keywords but same intent
-2. Be specific and searchable
-3. Focus on finding concrete examples or instances
-
-Format as numbered list:
-1. [query]
-2. [query]
-3. [query]
-4. [query]
-"""
+            prompt = render_prompt(
+                "prompts.advanced_search_system.candidate_exploration.parallel_explorer.parallelexplorer.generate_query_variations.prompt",
+                base_query=base_query,
+            )
 
             response = self.model.invoke(prompt).content.strip()
 

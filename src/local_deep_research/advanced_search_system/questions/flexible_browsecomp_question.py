@@ -7,6 +7,7 @@ Inherits from BrowseComp but gives the LLM more freedom in search strategy.
 from typing import Dict, List
 
 from .browsecomp_question import BrowseCompQuestionGenerator
+from local_deep_research.prompts import render_prompt
 
 
 class FlexibleBrowseCompQuestionGenerator(BrowseCompQuestionGenerator):
@@ -43,20 +44,24 @@ class FlexibleBrowseCompQuestionGenerator(BrowseCompQuestionGenerator):
             hint = "Continue exploring to answer the query."
 
         # Much simpler prompt - less prescriptive
-        prompt = f"""Generate {num_questions} new search queries for: {query}
-
-{hint}
-
-Available terms: {", ".join(entities["names"] + entities["temporal"] + entities["descriptors"])}
-
-Previous searches with results:
-{self._format_previous_searches(questions_by_iteration, results_by_iteration)}
-
-Current findings:
-{current_knowledge[: self.knowledge_truncate_length] if self.knowledge_truncate_length else current_knowledge}
-
-Create {num_questions} diverse search queries. Avoid exact duplicates. One per line.
-"""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.questions.flexible_browsecomp_question.flexiblebrowsecompquestiongenerator.generate_progressive_searches.prompt",
+            num_questions=num_questions,
+            query=query,
+            hint=hint,
+            join_8=", ".join(
+                entities["names"]
+                + entities["temporal"]
+                + entities["descriptors"]
+            ),
+            format_previous_searches_10=self._format_previous_searches(
+                questions_by_iteration, results_by_iteration
+            ),
+            conditional_12=current_knowledge[: self.knowledge_truncate_length]
+            if self.knowledge_truncate_length
+            else current_knowledge,
+            num_questions_2=num_questions,
+        )
 
         response = self.model.invoke(prompt)
         content = (

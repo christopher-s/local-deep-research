@@ -12,14 +12,19 @@ import time
 from typing import Any, Callable, Dict, Optional
 
 from ..api import quick_summary
+from ..prompts import render_prompt
 from .datasets import DEFAULT_DATASET_URLS, load_dataset
 from .datasets.base import DatasetRegistry
 from .graders import extract_answer_from_response, grade_results
 from .metrics import calculate_metrics, generate_report
-from .templates import BROWSECOMP_QUERY_TEMPLATE
+from .templates import BROWSECOMP_QUERY_PROMPT_KEY
 
 
-def format_query(question: str, dataset_type: str = "simpleqa") -> str:
+def format_query(
+    question: str,
+    dataset_type: str = "simpleqa",
+    settings_snapshot: Optional[Dict[str, Any]] = None,
+) -> str:
     """
     Format query based on dataset type.
 
@@ -31,8 +36,11 @@ def format_query(question: str, dataset_type: str = "simpleqa") -> str:
         Formatted query for LDR
     """
     if dataset_type.lower() == "browsecomp":
-        # BrowseComp requires specific formatting
-        return BROWSECOMP_QUERY_TEMPLATE.format(question=question)
+        return render_prompt(
+            BROWSECOMP_QUERY_PROMPT_KEY,
+            settings_snapshot=settings_snapshot,
+            question=question,
+        )
 
     # Simple format for SimpleQA
     return question
@@ -188,7 +196,9 @@ def run_benchmark(
 
         try:
             # Format query based on dataset type
-            formatted_query = format_query(question, dataset_type)
+            formatted_query = format_query(
+                question, dataset_type, settings_snapshot=settings_snapshot
+            )
 
             # Time the search
             start_time = time.time()

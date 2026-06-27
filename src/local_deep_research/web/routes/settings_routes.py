@@ -130,6 +130,56 @@ def _filter_editable_settings(form_data: dict, db_session: Session) -> dict:
     return all_db_settings
 
 
+def _build_new_setting_payload(
+    key: str,
+    value: Any,
+    setting_type: Optional[SettingType],
+    category: Optional[str],
+    settings_manager: Any,
+) -> dict[str, Any]:
+    """Build a new DB setting while preserving shipped default metadata.
+
+    Existing databases discover new defaults through ``get_all_settings()`` but
+    do not have rows for them yet. On the first edit, use the catalogue metadata
+    so multiline prompts do not degrade into generic single-line text fields.
+    """
+    default_meta = (
+        settings_manager.default_settings.get(key)
+        if settings_manager is not None
+        else None
+    )
+    if default_meta:
+        return {
+            "key": key,
+            "value": value,
+            "type": str(default_meta.get("type", "app")).lower(),
+            "name": default_meta.get("name")
+            or key.split(".")[-1].replace("_", " ").title(),
+            "description": default_meta.get("description")
+            or f"Setting for {key}",
+            "category": default_meta.get("category") or category,
+            "ui_element": default_meta.get("ui_element", "text"),
+            "options": default_meta.get("options"),
+            "min_value": default_meta.get("min_value"),
+            "max_value": default_meta.get("max_value"),
+            "step": default_meta.get("step"),
+            "visible": default_meta.get("visible", True),
+            "editable": default_meta.get("editable", True),
+        }
+
+    return {
+        "key": key,
+        "value": value,
+        "type": setting_type.value.lower()
+        if setting_type is not None
+        else "app",
+        "name": key.split(".")[-1].replace("_", " ").title(),
+        "description": f"Setting for {key}",
+        "category": category,
+        "ui_element": "text",
+    }
+
+
 # NOTE: Routes use session["username"] (not .get()) intentionally.
 # @login_required guarantees the key exists; direct access fails fast
 # if the decorator is ever removed.
@@ -159,6 +209,7 @@ ALLOWED_SETTING_PREFIXES = frozenset(
         "local_search_",
         "news.",
         "notifications.",
+        "prompts.",
         "rag.",
         "rate_limiting.",
         "report.",
@@ -504,6 +555,9 @@ def save_all_settings(
             elif key.startswith("chat."):
                 setting_type = SettingType.CHAT
                 category = "chat"
+            elif key.startswith("prompts."):
+                setting_type = SettingType.APP
+                category = "prompts_general"
             else:
                 setting_type = None
                 category = None
@@ -592,18 +646,9 @@ def save_all_settings(
                     )
                     continue
 
-                # Create a new setting
-                new_setting = {
-                    "key": key,
-                    "value": value,
-                    "type": setting_type.value.lower()
-                    if setting_type is not None
-                    else "app",
-                    "name": key.split(".")[-1].replace("_", " ").title(),
-                    "description": f"Setting for {key}",
-                    "category": category,
-                    "ui_element": "text",  # Default UI element
-                }
+                new_setting = _build_new_setting_payload(
+                    key, value, setting_type, category, settings_manager
+                )
 
                 # Determine better UI element based on value type
                 if isinstance(value, bool):
@@ -2208,9 +2253,7 @@ def api_get_rate_limiting_status():
             # Default True to match the schema default (default_settings.json)
             # and the tracker's web-mode default; the prior endpoint reported
             # the tracker's effective enabled state, which was on by default.
-            "enabled": _get_setting_from_session(
-                "rate_limiting.enabled", True
-            ),
+            "enabled": _get_setting_from_session("rate_limiting.enabled", True),
             "profile": _get_setting_from_session(
                 "rate_limiting.profile", "balanced"
             ),

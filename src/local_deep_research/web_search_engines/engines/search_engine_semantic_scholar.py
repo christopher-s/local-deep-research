@@ -11,6 +11,7 @@ from ...constants import SNIPPET_LENGTH_SHORT
 from ..rate_limiting import RateLimitError
 from ..search_engine_base import BaseSearchEngine
 from ...security import SafeSession
+from local_deep_research.prompts import render_prompt
 
 
 class SemanticScholarSearchEngine(BaseSearchEngine):
@@ -270,24 +271,10 @@ class SemanticScholarSearchEngine(BaseSearchEngine):
             return query
 
         try:
-            prompt = f"""Transform this natural language question into an optimized academic search query.
-
-Original query: "{query}"
-
-INSTRUCTIONS:
-1. Extract key academic concepts, technical terms, and proper nouns
-2. Remove generic words, filler words, and non-technical terms
-3. Add quotation marks around specific phrases that should be kept together
-4. Return ONLY the optimized search query with no explanation
-5. Keep it under 100 characters if possible
-
-EXAMPLE TRANSFORMATIONS:
-"What are the latest findings about mRNA vaccines and COVID-19?" → "mRNA vaccines COVID-19 recent findings"
-"How does machine learning impact climate change prediction?" → "machine learning "climate change" prediction"
-"Tell me about quantum computing approaches for encryption" → "quantum computing encryption"
-
-Return ONLY the optimized search query with no explanation.
-"""
+            prompt = render_prompt(
+                "prompts.web_search_engines.engines.search_engine_semantic_scholar.semanticscholarsearchengine.optimize_query.prompt",
+                query=query,
+            )
 
             response = self.llm.invoke(prompt)
             optimized_query = (
@@ -418,20 +405,10 @@ Return ONLY the optimized search query with no explanation.
             if self.llm:
                 try:
                     # Generate alternate search queries focusing on core concepts
-                    prompt = f"""You are helping refine a search query that returned no results.
-
-Original query: "{query}"
-
-The query might be too specific or use natural language phrasing that doesn't match academic paper keywords.
-
-Please provide THREE alternative search queries that:
-1. Focus on the core academic concepts
-2. Use precise terminology commonly found in academic papers
-3. Break down complex queries into more searchable components
-4. Format each as a concise keyword-focused search term (not a natural language question)
-
-Format each query on a new line with no numbering or explanation. Keep each query under 8 words and very focused.
-"""
+                    prompt = render_prompt(
+                        "prompts.web_search_engines.engines.search_engine_semantic_scholar.semanticscholarsearchengine.adaptive_search.prompt",
+                        query=query,
+                    )
                     # Get the LLM's response
                     response = self.llm.invoke(prompt)
 

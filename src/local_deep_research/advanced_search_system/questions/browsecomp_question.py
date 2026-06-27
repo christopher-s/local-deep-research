@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 from loguru import logger
 
 from .base_question import BaseQuestionGenerator
+from local_deep_research.prompts import render_prompt
 
 
 class BrowseCompQuestionGenerator(BaseQuestionGenerator):
@@ -72,26 +73,10 @@ class BrowseCompQuestionGenerator(BaseQuestionGenerator):
 
     def _extract_entities(self, query: str) -> Dict[str, List[str]]:
         """Extract concrete entities from the query."""
-        prompt = f"""Extract ALL concrete, searchable entities from this query:
-
-Query: {query}
-
-Extract:
-1. TEMPORAL: All years, dates, time periods (e.g., "2018", "between 1995 and 2006", "2023")
-2. NUMERICAL: All numbers, statistics, counts (e.g., "300", "more than 3", "4-3", "84.5%")
-3. NAMES: Partial names, name hints, proper nouns (e.g., "Dartmouth", "EMNLP", "Plastic Man")
-4. LOCATIONS: Places, institutions, geographic features (e.g., "Pennsylvania", "Grand Canyon")
-5. DESCRIPTORS: Key descriptive terms (e.g., "fourth wall", "ascetics", "decider game")
-
-For TEMPORAL entities, if there's a range (e.g., "between 2018-2023"), list EACH individual year.
-
-Format your response as:
-TEMPORAL: [entity1], [entity2], ...
-NUMERICAL: [entity1], [entity2], ...
-NAMES: [entity1], [entity2], ...
-LOCATIONS: [entity1], [entity2], ...
-DESCRIPTORS: [entity1], [entity2], ...
-"""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.questions.browsecomp_question.browsecompquestiongenerator.extract_entities.prompt",
+            query=query,
+        )
 
         response = self.model.invoke(prompt)
         content = (
@@ -251,33 +236,22 @@ Focus on finding the specific answer by combining entities systematically.
 """
 
         # Analyze what we've found so far
-        prompt = f"""Based on our search progress, generate targeted follow-up searches.
-{strategy_instruction}
-
-Original Query: {query}
-
-Entities Found:
-- Names/Terms: {", ".join(entities["names"][:5])}
-- Years: {", ".join(entities["temporal"][:5])}
-- Locations: {", ".join(entities["locations"][:3])}
-- Key Features: {", ".join(entities["descriptors"][:3])}
-
-Current Knowledge Summary:
-{current_knowledge[: self.knowledge_truncate_length] if self.knowledge_truncate_length else current_knowledge}
-
-Previous Searches:
-{self._format_previous_searches(questions_by_iteration, results_by_iteration)}
-
-Generate {num_questions} NEW search queries that:
-1. Combine 2-3 entities we haven't tried together
-2. If we found candidate names, search for them with other constraints
-3. For year ranges, systematically cover years we haven't searched
-4. Use quotes for exact phrases when beneficial
-
-Focus on finding the specific answer, not general information.
-
-Format: One search per line
-"""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.questions.browsecomp_question.browsecompquestiongenerator.generate_progressive_searches.prompt",
+            strategy_instruction=strategy_instruction,
+            query=query,
+            join_6=", ".join(entities["names"][:5]),
+            join_8=", ".join(entities["temporal"][:5]),
+            join_10=", ".join(entities["locations"][:3]),
+            join_12=", ".join(entities["descriptors"][:3]),
+            conditional_14=current_knowledge[: self.knowledge_truncate_length]
+            if self.knowledge_truncate_length
+            else current_knowledge,
+            format_previous_searches_16=self._format_previous_searches(
+                questions_by_iteration, results_by_iteration
+            ),
+            num_questions=num_questions,
+        )
 
         response = self.model.invoke(prompt)
         content = (

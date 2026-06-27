@@ -24,6 +24,7 @@ from ...citation_handler import CitationHandler
 from ..tools.fetch import FETCH_MODES, build_fetch_tool
 from .base_strategy import BaseSearchStrategy
 from ...security import sanitize_error_for_client
+from local_deep_research.prompts import render_prompt
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -332,11 +333,10 @@ def _make_research_subtopic_tool(
             )
 
         current_date = datetime.now(UTC).strftime("%Y-%m-%d")
-        subagent_prompt = (
-            f"You are a focused research assistant. Today's date: {current_date}. "
-            "Search thoroughly and return a concise factual summary. "
-            "Reference sources by their [N] index numbers. "
-            "Do NOT ask clarifying questions — provide your findings directly."
+        subagent_prompt = render_prompt(
+            "prompts.advanced_search_system.strategies.langgraph_agent_strategy.make_research_subtopic_tool.research_subtopic.subagent_prompt",
+            settings_snapshot=settings_snapshot,
+            current_date=current_date,
         )
 
         def run_subagent(topic: str) -> str:
@@ -867,23 +867,12 @@ class LangGraphAgentStrategy(BaseSearchStrategy):
                 "agent will see the unmodified prompt"
             )
 
-        system_prompt = (
-            f"You are a research assistant writing a research report. Today's date: {current_date}.\n"
-            "This is NOT a chat conversation. Your only job is to research the "
-            "given topic and produce a comprehensive, well-cited report.\n"
-            "Do NOT ask clarifying questions, do NOT ask the user anything, "
-            "do NOT offer to help further — just research and report.\n"
-            "You MUST search the web before answering — never answer from memory alone.\n\n"
-            "Strategy:\n"
-            "1. Start with web_search for initial exploration.\n"
-            "2. For complex multi-faceted questions, use research_subtopic to "
-            "investigate specific aspects in parallel (pass 2-5 focused questions).\n"
-            f"{fetch_line}"
-            "4. Use search_[engine] tools for domain-specific searches "
-            "(search_arxiv for science, search_pubmed for medical, etc.).\n"
-            "5. When you have enough information, provide a comprehensive answer "
-            "citing sources as [1], [2], etc.\n"
-            f"{policy_addendum}"
+        system_prompt = render_prompt(
+            "prompts.advanced_search_system.strategies.langgraph_agent_strategy.langgraphagentstrategy.analyze_topic.system_prompt",
+            settings_snapshot=self.settings_snapshot,
+            current_date=current_date,
+            fetch_line=fetch_line,
+            policy_addendum=policy_addendum,
         )
 
         # Create agent — may fail if model doesn't support tool calling.
@@ -1138,9 +1127,11 @@ class LangGraphAgentStrategy(BaseSearchStrategy):
                 f"[{r.get('index', '?')}] {r.get('title', '')}: "
                 f"{r.get('snippet', '')}"
             )
-        prompt = (
-            f"Synthesize a comprehensive answer to: {query}\n\n"
-            f"Based on these sources:\n" + "\n".join(summaries)
+        prompt = render_prompt(
+            "prompts.advanced_search_system.strategies.langgraph_agent_strategy.fallback_synthesis",
+            settings_snapshot=self.settings_snapshot,
+            query=query,
+            sources="\n".join(summaries),
         )
         try:
             response = self.model.invoke(prompt)

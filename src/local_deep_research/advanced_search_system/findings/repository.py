@@ -10,6 +10,7 @@ from langchain_core.language_models import BaseLanguageModel
 
 from ...utilities.search_utilities import format_findings
 from .base_findings import BaseFindingsRepository
+from local_deep_research.prompts import render_prompt
 
 
 def format_links(links: List[Dict]) -> str:
@@ -272,25 +273,12 @@ class FindingsRepository(BaseFindingsRepository):
                         "Knowledge truncated to fit within token limits"
                     )
 
-            prompt = f"""Use IEEE style citations [1], [2], etc. Never make up your own citations. Synthesize the following accumulated knowledge into a comprehensive answer for the original query.
-Format the response with clear sections, citations, and a concise summary.
-
-Original Query: {query}
-
-Accumulated Knowledge:
-{current_knowledge}
-
-Sub-questions asked (for context):
-{chr(10).join(f"- {sq}" for sq in sub_queries)}
-
-Generate a well-structured, concise answer that:
-1. Starts with a clear explanation of the most important points
-2. Organizes information into logical sections with headers if needed
-3. Maintains logical flow and prioritizes important information over minor details
-4. Avoids repetition and unnecessary detail
-
-Use IEEE style citations [1], [2], etc. Never make up your own citations.
-"""
+            prompt = render_prompt(
+                "prompts.advanced_search_system.findings.repository.findingsrepository.synthesize_findings.prompt",
+                query=query,
+                current_knowledge=current_knowledge,
+                join_6=chr(10).join((f"- {sq}" for sq in sub_queries)),
+            )
 
             logger.info(
                 f"Synthesizing final answer. Query: '{query}'. Knowledge length: {len(current_knowledge)}. Prompt length: {len(prompt)}"

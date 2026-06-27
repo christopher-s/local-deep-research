@@ -10,6 +10,7 @@ from ..config.llm_config import get_llm
 from ..database.models import ResearchResource
 from ..database.session_context import get_user_db_session
 from ..utilities.json_utils import extract_json, get_llm_response_text
+from ..prompts import render_prompt
 from .models import DomainClassification
 
 
@@ -170,25 +171,14 @@ class DomainClassifier:
             if sample.get("preview"):
                 samples_text.append(f"   Preview: {sample['preview'][:100]}...")
 
-        return f"""Classify the following domain into one of the predefined categories.
-
-Domain: {domain}
-
-Sample content from this domain:
-{chr(10).join(samples_text) if samples_text else "No samples available"}
-
-Available Categories:
-{chr(10).join(categories_text)}
-
-Respond with a JSON object containing:
-- "category": The main category (e.g., "News & Media")
-- "subcategory": The specific subcategory (e.g., "Tech News")
-- "confidence": A confidence score between 0 and 1
-- "reasoning": A brief explanation (max 100 words) of why this classification was chosen
-
-Focus on accuracy. If uncertain, use "Other" category with "Unknown" subcategory.
-
-JSON Response:"""
+        return render_prompt(
+            "prompts.domain_classifier.classification",
+            domain=domain,
+            samples="\n".join(samples_text)
+            if samples_text
+            else "No samples available",
+            categories="\n".join(categories_text),
+        )
 
     def classify_domain(
         self, domain: str, force_update: bool = False

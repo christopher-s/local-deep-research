@@ -10,6 +10,7 @@ from loguru import logger
 
 from .base_filter import BaseFilter
 from ...utilities.json_utils import extract_json, get_llm_response_text
+from local_deep_research.prompts import render_prompt
 
 
 class FollowUpRelevanceFilter(BaseFilter):
@@ -139,22 +140,12 @@ Previous Research Context:
 ---
 """
 
-        prompt = f"""
-Select the most relevant sources for answering this follow-up question based on the previous research context.
-{context_section}
-Follow-up question: "{query}"
-
-Available sources from previous research:
-{sources_text}
-
-Instructions:
-- Select sources that are most relevant to the follow-up question given the context
-- Consider which sources directly address the question or provide essential information
-- Think about what the user is asking for in relation to the previous findings
-- Return ONLY a JSON array of source numbers (e.g., [0, 2, 5, 7])
-- Do not include any explanation or other text
-
-Return the indices of relevant sources as a JSON array:"""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.filters.followup_relevance_filter.followuprelevancefilter.select_relevant_sources.prompt",
+            context_section=context_section,
+            query=query,
+            sources_text=sources_text,
+        )
 
         try:
             response = self.model.invoke(prompt)

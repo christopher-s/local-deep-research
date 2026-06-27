@@ -14,6 +14,7 @@ from ...utilities.js_rendering import (
     read_js_rendering_setting as _read_js_rendering_setting,
 )
 from ...utilities.json_utils import extract_json, get_llm_response_text
+from local_deep_research.prompts import render_prompt
 
 
 @runtime_checkable
@@ -54,18 +55,12 @@ class FullSearchResults:
 
         now = datetime.now(UTC)
         current_time = now.strftime("%Y-%m-%d")
-        prompt = f"""ONLY Return a JSON array. The response contains no letters. Evaluate these URLs for:
-            1. Timeliness (today: {current_time})
-            2. Factual accuracy (cross-reference major claims)
-            3. Source reliability (prefer official company websites, established news outlets)
-            4. Direct relevance to query: {query}
-
-            URLs to evaluate:
-            {results}
-
-            Return a JSON array of indices (0-based) for sources that meet ALL criteria.
-            ONLY Return a JSON array of indices (0-based) and nothing else. No letters.
-            Example response: \n[0, 2, 4]\n\n"""
+        prompt = render_prompt(
+            "prompts.web_search_engines.engines.full_search.fullsearchresults.check_urls.prompt",
+            current_time=current_time,
+            query=query,
+            results=results,
+        )
 
         try:
             if self.llm is None:

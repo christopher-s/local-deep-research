@@ -9,6 +9,7 @@ from loguru import logger
 
 from ..constraints.base_constraint import Constraint
 from .base_evidence import Evidence, EvidenceType
+from local_deep_research.prompts import render_prompt
 
 
 class EvidenceEvaluator:
@@ -30,32 +31,14 @@ class EvidenceEvaluator:
         self, search_result: str, candidate: str, constraint: Constraint
     ) -> Evidence:
         """Extract evidence from search results for a specific constraint."""
-        prompt = f"""
-Extract evidence regarding whether "{candidate}" satisfies this constraint:
-
-Constraint: {constraint.description}
-Constraint Type: {constraint.type.value}
-Required Value: {constraint.value}
-
-Search Results:
-{search_result[:3000]}
-
-Provide:
-1. CLAIM: What the evidence claims about the constraint
-2. TYPE: direct_statement, official_record, research_finding, news_report, statistical_data, inference, correlation, or speculation
-3. SOURCE: Where this evidence comes from
-4. CONFIDENCE: How confident you are this evidence is accurate (0.0-1.0)
-5. REASONING: Why this evidence supports or refutes the constraint
-6. QUOTE: Relevant quote from the search results (if any)
-
-Format:
-CLAIM: [specific claim]
-TYPE: [evidence type]
-SOURCE: [source description]
-CONFIDENCE: [0.0-1.0]
-REASONING: [explanation]
-QUOTE: [relevant text]
-"""
+        prompt = render_prompt(
+            "prompts.advanced_search_system.evidence.evaluator.evidenceevaluator.extract_evidence.prompt",
+            candidate=candidate,
+            constraint_description=constraint.description,
+            constraint_type_value=constraint.type.value,
+            constraint_value=constraint.value,
+            search_result_excerpt=search_result[:3000],
+        )
 
         response = self.model.invoke(prompt)
         content = response.content

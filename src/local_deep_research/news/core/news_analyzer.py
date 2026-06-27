@@ -11,6 +11,7 @@ from .utils import generate_card_id
 from ..utils.topic_generator import generate_topics
 from ...config.llm_config import get_llm
 from ...utilities.json_utils import extract_json, get_llm_response_text
+from local_deep_research.prompts import render_prompt
 
 
 class NewsAnalyzer:
@@ -128,25 +129,12 @@ class NewsAnalyzer:
             search_results  # Use all results, let LLM handle token limits
         )
 
-        prompt = f"""
-Extract up to {max_items} important news stories from these search results.
-Today's date: {datetime.now(UTC).strftime("%B %d, %Y")}
-
-{snippets}
-
-For each news story, extract:
-1. headline - 8 words max describing the story
-2. category - A descriptive category for this news (be specific, not limited to generic categories)
-3. summary - 3 clear sentences about what happened
-4. impact_score - 1-10 based on significance
-5. source_url - URL from the search results
-6. entities - people, places, organizations mentioned
-7. is_developing - true/false if story is still developing
-8. time_ago - when it happened (2 hours ago, yesterday, etc)
-
-Return as JSON array of news items.
-Focus on genuinely newsworthy stories.
-"""
+        prompt = render_prompt(
+            "prompts.news.core.news_analyzer.newsanalyzer.extract_news_items.prompt",
+            max_items=max_items,
+            strftime_4=datetime.now(UTC).strftime("%B %d, %Y"),
+            snippets=snippets,
+        )
 
         try:
             response = self.llm_client.invoke(prompt)
@@ -191,15 +179,10 @@ Focus on genuinely newsworthy stories.
             ]
         )
 
-        prompt = f"""
-Based on these news stories, write THE BIG PICTURE summary.
-Connect the dots between events. What's the larger narrative?
-Write 3-4 sentences maximum.
-
-News stories:
-{summaries}
-
-THE BIG PICTURE:"""
+        prompt = render_prompt(
+            "prompts.news.core.news_analyzer.newsanalyzer.generate_big_picture.prompt",
+            summaries=summaries,
+        )
 
         try:
             response = self.llm_client.invoke(prompt)
@@ -240,15 +223,10 @@ THE BIG PICTURE:"""
             ]
         )
 
-        prompt = f"""
-Based on these developing news stories, what should we watch for in the next 24-48 hours?
-Write 3-5 specific, actionable items.
-
-Developing stories:
-{summaries}
-
-WATCH FOR:
--"""
+        prompt = render_prompt(
+            "prompts.news.core.news_analyzer.newsanalyzer.generate_watch_for.prompt",
+            summaries=summaries,
+        )
 
         try:
             response = self.llm_client.invoke(prompt)
@@ -303,15 +281,13 @@ WATCH FOR:
             ]
         )
 
-        prompt = f"""
-Identify emerging patterns from today's news distribution:
-
-{category_summary}
-
-Top headlines:
-{chr(10).join([f"- {item['headline']}" for item in news_items[:10]])}
-
-PATTERN RECOGNITION (1-2 sentences):"""
+        prompt = render_prompt(
+            "prompts.news.core.news_analyzer.newsanalyzer.generate_patterns.prompt",
+            category_summary=category_summary,
+            join_4=chr(10).join(
+                [f"- {item['headline']}" for item in news_items[:10]]
+            ),
+        )
 
         try:
             response = self.llm_client.invoke(prompt)
