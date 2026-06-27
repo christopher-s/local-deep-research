@@ -84,7 +84,11 @@ const BenchmarkDashboardTests = {
         await page.waitForFunction(
             () => {
                 const sel = document.querySelector('#evaluation_provider');
-                return sel && Array.from(sel.options).some(o => o.value && o.value.length > 0);
+                const model = document.querySelector('#evaluation_model');
+                return sel
+                    && Array.from(sel.options).some(o => o.value && o.value.length > 0)
+                    && Boolean(sel.value)
+                    && Boolean(model?.value);
             },
             { timeout: 5000 }
         ).catch(() => {});
@@ -97,20 +101,25 @@ const BenchmarkDashboardTests = {
                 hasProvider: !!provider,
                 providerOptionCount: opts.length,
                 providerOptions: opts.slice(0, 6),
+                providerValue: provider?.value || '',
                 // #evaluation_model is a custom-dropdown <input> (render_dropdown),
-                // not a <select>; assert the type and that it lives in the form.
+                // not a <select>; assert the type, form ownership, and that the
+                // configured model is visibly populated after initialization.
                 modelIsInput: model?.tagName === 'INPUT',
                 modelInForm: !!model?.closest('form#benchmark-form'),
+                modelValue: model?.value || '',
             };
         });
 
         const passed = result.hasProvider && result.providerOptionCount > 0
-            && result.modelIsInput && result.modelInForm;
+            && Boolean(result.providerValue)
+            && result.modelIsInput && result.modelInForm
+            && Boolean(result.modelValue);
         return {
             passed,
             message: passed
-                ? `Benchmark config: #evaluation_provider has ${result.providerOptionCount} options (${result.providerOptions.join(', ')}) + #evaluation_model is an input inside #benchmark-form`
-                : `Benchmark config incomplete (provider=${result.hasProvider}, providerOptions=${result.providerOptionCount}, modelIsInput=${result.modelIsInput}, modelInForm=${result.modelInForm})`
+                ? `Benchmark config: provider=${result.providerValue}, model=${result.modelValue}, options=${result.providerOptionCount}`
+                : `Benchmark config incomplete (provider=${result.hasProvider}, providerValue=${result.providerValue}, providerOptions=${result.providerOptionCount}, modelIsInput=${result.modelIsInput}, modelInForm=${result.modelInForm}, modelValue=${result.modelValue})`
         };
     },
 

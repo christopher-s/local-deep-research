@@ -457,6 +457,16 @@ let evalModelData = null;
 let evalTempData = null;
 let evalEndpointData = null;
 
+function getSettingResponseValue(data, fallback = null) {
+    if (data && Object.prototype.hasOwnProperty.call(data, 'value')) {
+        return data.value;
+    }
+    if (data && data.settings && Object.prototype.hasOwnProperty.call(data.settings, 'value')) {
+        return data.settings.value;
+    }
+    return fallback;
+}
+
 // Global variables for providers loaded from API
 let EVAL_MODEL_PROVIDERS = [];
 
@@ -994,17 +1004,19 @@ function checkForRunningBenchmark() {
 async function loadCurrentSettings() {
     console.log('Starting loadCurrentSettings...');
 
-    // Declare variables in function scope for access in all blocks
+    // Research settings are local to this loader. Evaluation settings use the
+    // globals declared above because initializeEvaluationSettings() and
+    // loadEvaluationSettings() consume them after the async requests finish.
     let llmProviderData = null;
     let llmModelData = null;
     let searchToolData = null;
     let iterationsData = null;
     let questionsData = null;
     let strategyData = null;
-    let evalProviderData = null;
-    let evalModelData = null;
-    let evalTempData = null;
-    let evalEndpointData = null;
+    evalProviderData = null;
+    evalModelData = null;
+    evalTempData = null;
+    evalEndpointData = null;
 
     try {
         // Load settings individually
@@ -1124,16 +1136,16 @@ async function loadCurrentSettings() {
             document.getElementById('current-strategy').textContent = 'ERROR: Failed to load';
         }
 
-        // Display evaluation settings (commented out as these elements don't exist)
-        // TODO: Add evaluation settings display section if needed
-
-        // For now, just log the evaluation settings
         console.log('Evaluation settings loaded:', {
-            provider: evalProviderData?.settings?.value || 'openai_endpoint',
-            model: evalModelData?.settings?.value || 'anthropic/claude-3.7-sonnet',
-            temperature: evalTempData?.settings?.value || 0,
-            endpoint: evalEndpointData?.settings?.value || 'https://openrouter.ai/api/v1'
+            provider: getSettingResponseValue(evalProviderData, 'openai_endpoint'),
+            model: getSettingResponseValue(evalModelData, 'anthropic/claude-3.7-sonnet'),
+            temperature: getSettingResponseValue(evalTempData, 0),
+            endpoint: getSettingResponseValue(evalEndpointData, 'https://openrouter.ai/api/v1')
         });
+
+        // The evaluation form may have initialized before these async requests
+        // completed. Populate it again now that the authoritative values exist.
+        loadEvaluationSettings();
 
     } catch (error) {
         console.error('Error loading current settings:', error);
@@ -1837,15 +1849,20 @@ function populateEvaluationProviders() {
         evaluationProviderSelect.appendChild(option);
     });
 
-    // Set initial value from data attribute
-    const initialProvider = evaluationProviderSelect.getAttribute('data-initial-value') || 'openai_endpoint';
+    // Provider options discovered by the API use uppercase keys while persisted
+    // settings use normalized lowercase keys. Select case-insensitively.
+    const initialProviderRaw = evaluationProviderSelect.getAttribute('data-initial-value') || 'openai_endpoint';
+    const initialProviderOption = Array.from(evaluationProviderSelect.options).find(
+        option => option.value.toLowerCase() === initialProviderRaw.toLowerCase()
+    );
+    const initialProvider = initialProviderOption ? initialProviderOption.value : initialProviderRaw;
     console.log('Setting initial evaluation provider to:', initialProvider);
     evaluationProviderSelect.value = initialProvider;
 
     // Show/hide endpoint field based on initial provider
     if (evaluationEndpointInput && evaluationEndpointInput.parentNode) {
         evaluationEndpointInput.parentNode.style.display =
-            initialProvider === 'openai_endpoint' ? 'block' : 'none';
+            initialProvider.toLowerCase() === 'openai_endpoint' ? 'block' : 'none';
     }
 
     console.log('Populated evaluation providers with initial value:', initialProvider);
@@ -2202,15 +2219,11 @@ function loadEvaluationSettings() {
     }
 
     // Set provider
-    if (evaluationProviderSelect && evalProviderData && evalProviderData.settings) {
-        let providerValue = evalProviderData.settings.value || 'openai_endpoint';
-
-        // The backend stores lowercase values but the UI might use uppercase
-        // Try to find a matching uppercase value first
-        const uppercaseValue = providerValue.toUpperCase();
+    if (evaluationProviderSelect && evalProviderData) {
+        let providerValue = getSettingResponseValue(evalProviderData, 'openai_endpoint');
         const providerOptions = Array.from(evaluationProviderSelect.options);
-        const matchingOption = providerOptions.find(opt =>
-            opt.value === uppercaseValue || opt.value === providerValue
+        const matchingOption = providerOptions.find(
+            option => option.value.toLowerCase() === String(providerValue).toLowerCase()
         );
 
         if (matchingOption) {
@@ -2223,7 +2236,7 @@ function loadEvaluationSettings() {
         // Show/hide endpoint field
         if (evaluationEndpointInput && evaluationEndpointInput.parentNode) {
             evaluationEndpointInput.parentNode.style.display =
-                (providerValue === 'openai_endpoint' || providerValue === 'OPENAI_ENDPOINT') ? 'block' : 'none';
+                String(providerValue).toLowerCase() === 'openai_endpoint' ? 'block' : 'none';
         }
     }
 
@@ -2234,8 +2247,11 @@ function loadEvaluationSettings() {
         let modelValue = hiddenInput && hiddenInput.value ? hiddenInput.value : null;
 
         // Only use API data if there's no initial value from template
-        if (!modelValue && evalModelData && evalModelData.settings) {
-            modelValue = evalModelData.settings.value || 'anthropic/claude-3.7-sonnet';
+        if (!modelValue && evalModelData) {
+            modelValue = getSettingResponseValue(
+                evalModelData,
+                'anthropic/claude-3.7-sonnet'
+            );
         } else if (!modelValue) {
             modelValue = 'anthropic/claude-3.7-sonnet';
         }
@@ -2284,15 +2300,18 @@ function loadEvaluationSettings() {
     }
 
     // Set endpoint URL
-    if (evaluationEndpointInput && evalEndpointData && evalEndpointData.settings) {
-        const endpointValue = evalEndpointData.settings.value || 'https://openrouter.ai/api/v1';
+    if (evaluationEndpointInput && evalEndpointData) {
+        const endpointValue = getSettingResponseValue(
+            evalEndpointData,
+            'https://openrouter.ai/api/v1'
+        );
         console.log('Setting evaluation endpoint to:', endpointValue);
         evaluationEndpointInput.value = endpointValue;
     }
 
     // Set temperature
-    if (evaluationTemperatureInput && evalTempData && evalTempData.settings) {
-        const tempValue = evalTempData.settings.value || 0;
+    if (evaluationTemperatureInput && evalTempData) {
+        const tempValue = getSettingResponseValue(evalTempData, 0);
         console.log('Setting evaluation temperature to:', tempValue);
         evaluationTemperatureInput.value = tempValue;
     }
