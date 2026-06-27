@@ -1294,7 +1294,8 @@ Multiple studies [1, 2, 3] have shown promising results.
         # Check YAML header
         assert "---" in result
         assert 'title: "AI Safety Research"' in result
-        assert 'author: "Local Deep Research"' in result
+        assert 'author: "Local Deep Research"' not in result
+        assert "Local Deep Research" not in result.split("---", 2)[1]
         # Check that date is in YYYY-MM-DD format
         import re
 

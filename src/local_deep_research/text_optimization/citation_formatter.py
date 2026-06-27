@@ -712,7 +712,6 @@ class QuartoExporter:
         current_date = datetime.now(UTC).strftime("%Y-%m-%d")
         yaml_header = f"""---
 title: "{title}"
-author: "Local Deep Research"
 date: "{current_date}"
 format:
   html:
