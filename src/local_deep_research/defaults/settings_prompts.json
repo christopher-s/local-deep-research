@@ -657,6 +657,20 @@
     "value": "Generate a concise 3-7 word title for this research query. Return ONLY the title, no quotes or explanation.\n\nQuery: {{query_excerpt}}",
     "visible": true
   },
+  "prompts.citation_handlers.base_citation_handler.output_style_prefix": {
+    "category": "prompts_synthesis",
+    "description": "Wrapper placed before synthesis prompts when General → Output Instructions is set. Available placeholders: {{output_instructions}}.",
+    "editable": true,
+    "max_value": 100000,
+    "min_value": null,
+    "name": "Output Instructions — Synthesis Prefix",
+    "options": null,
+    "step": null,
+    "type": "APP",
+    "ui_element": "textarea",
+    "value": "User-Specified Output Style: {{output_instructions}}\n\n",
+    "visible": true
+  },
   "prompts.citation_handlers.forced_answer_citation_handler.forcedanswercitationhandler.analyze_followup.fact_check_prompt": {
     "category": "prompts_synthesis",
     "description": "Editable runtime prompt template. Available placeholders: {{previous_knowledge}}, {{formatted_sources}}",

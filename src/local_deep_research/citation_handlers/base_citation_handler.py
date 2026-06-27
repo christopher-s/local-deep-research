@@ -8,6 +8,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 from langchain_core.documents import Document
 from loguru import logger
 
+from ..prompts import render_prompt
 from ..utilities.type_utils import unwrap_setting
 from ..utilities.json_utils import get_llm_response_text
 
@@ -133,7 +134,11 @@ class BaseCitationHandler(ABC):
         ).strip()
 
         if output_instructions:
-            return f"User-Specified Output Style: {output_instructions}\n\n"
+            return render_prompt(
+                "prompts.citation_handlers.base_citation_handler.output_style_prefix",
+                settings_snapshot=self.settings_snapshot,
+                output_instructions=output_instructions,
+            )
         return ""
 
     def _create_documents(
