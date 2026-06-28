@@ -9,7 +9,11 @@ from pathlib import Path
 from loguru import logger
 
 from ...exceptions import DuplicateResearchError, ResearchTerminatedException
-from ...config.llm_config import get_llm
+from ...config.llm_config import (
+    get_llm,
+    get_role_llm,
+    resolve_base_llm_settings,
+)
 from ...settings.manager import SnapshotSettingsContext
 
 # Output directory for research results
@@ -846,6 +850,11 @@ def run_research_process(research_id, query, mode, **kwargs):
 
     logger.info(f"Research thread started with username: {username}")
 
+    use_llm = None
+    analysis_llm = None
+    analysis_llm_settings = None
+    report_llm = None
+
     try:
         # Check if this research has been terminated before we even start
         if is_termination_requested(research_id):
@@ -1257,7 +1266,6 @@ def run_research_process(research_id, query, mode, **kwargs):
             return False  # Not terminated
 
         # Configure the system with the specified parameters
-        use_llm = None
         if model or search_engine or model_provider:
             # Log that we're overriding system settings
             logger.info(
@@ -1314,6 +1322,27 @@ def run_research_process(research_id, query, mode, **kwargs):
                 # For other errors, re-raise to avoid silent failures
                 raise
 
+        if use_llm is None:
+            use_llm = get_llm(
+                research_id=research_id,
+                research_context=shared_research_context,
+                settings_snapshot=settings_snapshot,
+            )
+
+        base_llm_settings = resolve_base_llm_settings(
+            settings_snapshot,
+            provider=model_provider,
+            model_name=model,
+        )
+        analysis_llm, analysis_llm_settings, _analysis_llm_owned = get_role_llm(
+            "analysis",
+            fallback_llm=use_llm,
+            settings_snapshot=settings_snapshot,
+            fallback_settings=base_llm_settings,
+            research_id=research_id,
+            research_context=shared_research_context,
+        )
+
         # Create search engine first if specified, to avoid default creation without username
         use_search = None
         if search_engine:
@@ -1357,6 +1386,7 @@ def run_research_process(research_id, query, mode, **kwargs):
         # Set the progress callback in the system
         system = AdvancedSearchSystem(
             llm=use_llm,  # type: ignore[arg-type]
+            analysis_llm=analysis_llm,
             search=use_search,  # type: ignore[arg-type]
             strategy_name=strategy,
             max_iterations=iterations,
@@ -1366,6 +1396,7 @@ def run_research_process(research_id, query, mode, **kwargs):
             research_id=research_id,
             research_context=shared_research_context,
         )
+        system.analysis_llm_settings = analysis_llm_settings
         system.set_progress_callback(progress_callback)
 
         # Chat mode: set up LLM streaming callback for real-time response chunks
@@ -2087,6 +2118,10 @@ def run_research_process(research_id, query, mode, **kwargs):
 
             # Extract the search system from the results if available
             search_system = results.get("search_system", None)
+            if search_system is None:
+                raise RuntimeError(  # noqa: TRY301 — handled by outer research failure path
+                    "Detailed report generation requires the completed search system"
+                )
 
             # Wrapper that maps report generator's 0-100% to the configured
             # detailed-mode range and relays cancellation checks through the
@@ -2105,10 +2140,24 @@ def run_research_process(research_id, query, mode, **kwargs):
                     adjusted = progress_percent
                 progress_callback(message, adjusted, metadata)
 
-            # Pass the existing search system to maintain citation indices
+            report_llm, _report_llm_settings, _report_llm_owned = get_role_llm(
+                "report",
+                fallback_llm=search_system.analysis_model,
+                fallback_settings=search_system.analysis_llm_settings,
+                settings_snapshot=settings_snapshot,
+                research_id=research_id,
+                research_context=shared_research_context,
+            )
+
+            # Pass the existing search system to maintain citation indices and
+            # the distinct report model to structure and write final prose.
             report_generator = IntegratedReportGenerator(
                 search_system=search_system,
+                llm=report_llm,
                 settings_snapshot=settings_snapshot,
+                rewrite_sections_with_report_llm=(
+                    report_llm is not search_system.analysis_model
+                ),
             )
             final_report = report_generator.generate_report(
                 results, query, progress_callback=report_progress_callback
@@ -2680,10 +2729,17 @@ def run_research_process(research_id, query, mode, **kwargs):
         # See AdvancedSearchSystem.close() for details.
         if "system" in locals():
             safe_close(system, "research system")
-        # Close the LLM instance created for model/provider overrides.
-        # system.close() does NOT close the LLM passed to it via system.model,
-        # so we must close it explicitly here.
-        if "use_llm" in locals():
+        # Close distinct role LLMs exactly once. system.close() does not own
+        # model clients passed into it.
+        if (
+            report_llm is not None
+            and report_llm is not analysis_llm
+            and report_llm is not use_llm
+        ):
+            safe_close(report_llm, "report LLM")
+        if analysis_llm is not None and analysis_llm is not use_llm:
+            safe_close(analysis_llm, "analysis LLM")
+        if use_llm is not None:
             safe_close(use_llm, "research LLM")
 
 

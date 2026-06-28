@@ -1076,6 +1076,8 @@
         if (category === 'app_parameters') return 'App Parameters';
         if (category === 'llm_general') return 'LLM General';
         if (category === 'llm_parameters') return 'LLM Parameters';
+        if (category === 'llm_analysis') return 'LLM Analysis';
+        if (category === 'llm_report') return 'LLM Report';
         if (category === 'report_parameters') return 'Report Parameters';
         if (category === 'search_general') return 'Search General';
         if (category === 'notifications') return 'Notifications';

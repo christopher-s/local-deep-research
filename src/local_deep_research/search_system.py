@@ -59,6 +59,7 @@ class AdvancedSearchSystem:
         self,
         llm: BaseChatModel,
         search: BaseSearchEngine,
+        analysis_llm: BaseChatModel | None = None,
         strategy_name: str = "source-based",  # Default to comprehensive research strategy
         include_text_content: bool = True,
         use_cross_engine_filter: bool = True,
@@ -75,8 +76,10 @@ class AdvancedSearchSystem:
         """Initialize the advanced search system.
 
         Args:
-            llm: LLM to use for the search strategy.
+            llm: LLM to use for search planning, query generation, and tool use.
             search: Search engine to use for queries.
+            analysis_llm: Optional distinct LLM used for source synthesis inside
+                analyze_topic. Falls back to ``llm``.
             strategy_name: The name of the search strategy to use. Options:
                 - "standard": Basic iterative search strategy
                 - "iterdrag": Iterative Dense Retrieval Augmented Generation
@@ -121,6 +124,8 @@ class AdvancedSearchSystem:
 
         # Store required components
         self.model = llm
+        self.analysis_model = analysis_llm or llm
+        self.analysis_llm_settings: dict[str, Any] = {}
         self.search = search
 
         # Store settings snapshot. Inject the username under "_username" so
@@ -172,10 +177,10 @@ class AdvancedSearchSystem:
 
         # Initialize components
         self.citation_handler = CitationHandler(
-            self.model, settings_snapshot=self.settings_snapshot
+            self.analysis_model, settings_snapshot=self.settings_snapshot
         )
         self.question_generator = StandardQuestionGenerator(self.model)
-        self.findings_repository = FindingsRepository(self.model)
+        self.findings_repository = FindingsRepository(self.analysis_model)
         # For backward compatibility
         self.questions_by_iteration: dict[Any, Any] = {}
         self.progress_callback = lambda _1, _2, _3: None
@@ -204,6 +209,7 @@ class AdvancedSearchSystem:
                 strategy_name=delegate_strategy_name,
                 model=self.model,
                 search=self.search,
+                analysis_model=self.analysis_model,
                 all_links_of_system=[],
                 settings_snapshot=self.settings_snapshot,
                 knowledge_accumulation_mode=True,
@@ -226,6 +232,7 @@ class AdvancedSearchSystem:
                 strategy_name=strategy_name,
                 model=self.model,
                 search=self.search,
+                analysis_model=self.analysis_model,
                 all_links_of_system=self.all_links_of_system,
                 settings_snapshot=self.settings_snapshot,
                 # Pass strategy-specific parameters
@@ -250,6 +257,15 @@ class AdvancedSearchSystem:
                 # (e.g. langgraph-agent) can match the system's mode.
                 programmatic_mode=self.programmatic_mode,
             )
+
+        # Use the strategy's handler as the canonical synthesis handler. Some
+        # strategies intentionally select a specialized handler type, while
+        # still using the distinct analysis model supplied above.
+        strategy_citation_handler = getattr(
+            self.strategy, "citation_handler", None
+        )
+        if strategy_citation_handler is not None:
+            self.citation_handler = strategy_citation_handler
 
         # Log the actual strategy class
         logger.info(f"Created strategy of type: {type(self.strategy).__name__}")

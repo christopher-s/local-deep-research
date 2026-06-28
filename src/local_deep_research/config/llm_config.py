@@ -25,6 +25,142 @@ def get_selected_llm_provider(settings_snapshot=None):
     )
 
 
+_ROLE_LLM_FIELDS = ("provider", "model", "temperature", "max_tokens")
+_ROLE_LLM_NAMES = frozenset({"analysis", "report"})
+
+
+def _is_role_override(value: Any) -> bool:
+    """Return whether a role-specific setting contains an explicit value."""
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    return True
+
+
+def resolve_base_llm_settings(
+    settings_snapshot=None,
+    *,
+    provider=None,
+    model_name=None,
+    temperature=None,
+    max_tokens=None,
+) -> dict[str, Any]:
+    """Resolve the effective search/research LLM settings.
+
+    Explicit request-time overrides take precedence over the snapshot so later
+    pipeline roles inherit from the model actually used for searching.
+    """
+    snapshot_values = {
+        "provider": get_setting_from_snapshot(
+            "llm.provider", "ollama", settings_snapshot=settings_snapshot
+        ),
+        "model": get_setting_from_snapshot(
+            "llm.model", "", settings_snapshot=settings_snapshot
+        ),
+        "temperature": get_setting_from_snapshot(
+            "llm.temperature", 0.7, settings_snapshot=settings_snapshot
+        ),
+        "max_tokens": get_setting_from_snapshot(
+            "llm.max_tokens", 30000, settings_snapshot=settings_snapshot
+        ),
+    }
+    explicit = {
+        "provider": provider,
+        "model": model_name,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    return {
+        field: value if _is_role_override(value) else snapshot_values[field]
+        for field, value in explicit.items()
+    }
+
+
+def resolve_role_llm_settings(
+    role: str,
+    settings_snapshot=None,
+    fallback_settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Resolve one pipeline role's LLM settings with inheritance.
+
+    ``llm.*`` remains the search/research model. ``llm.analysis.*`` and
+    ``llm.report.*`` override individual fields. A report role may inherit
+    from the already-resolved analysis role, preserving a natural
+    search -> analysis -> report fallback chain.
+    """
+    role = role.strip().lower()
+    if role not in _ROLE_LLM_NAMES:
+        raise ValueError(
+            f"Unknown LLM role '{role}'. Expected one of: {sorted(_ROLE_LLM_NAMES)}"
+        )
+
+    if fallback_settings is None:
+        fallback_settings = resolve_base_llm_settings(settings_snapshot)
+
+    resolved: dict[str, Any] = {}
+    for field in _ROLE_LLM_FIELDS:
+        override = get_setting_from_snapshot(
+            f"llm.{role}.{field}", "", settings_snapshot=settings_snapshot
+        )
+        resolved[field] = (
+            override
+            if _is_role_override(override)
+            else fallback_settings.get(field)
+        )
+    return resolved
+
+
+def get_role_llm(
+    role: str,
+    *,
+    fallback_llm,
+    settings_snapshot=None,
+    fallback_settings: dict[str, Any] | None = None,
+    research_id=None,
+    research_context=None,
+):
+    """Return an LLM for a pipeline role, reusing the fallback when possible.
+
+    Returns ``(llm, resolved_settings, owns_llm)``. ``owns_llm`` is true only
+    when this function constructed a distinct instance that the caller must
+    close. Provider credentials and endpoints continue to come from the shared
+    ``llm.<provider>.*`` settings; only role-selectable fields are overlaid.
+    """
+    role = role.strip().lower()
+    resolved = resolve_role_llm_settings(
+        role,
+        settings_snapshot=settings_snapshot,
+        fallback_settings=fallback_settings,
+    )
+    has_override = any(
+        _is_role_override(
+            get_setting_from_snapshot(
+                f"llm.{role}.{field}", "", settings_snapshot=settings_snapshot
+            )
+        )
+        for field in _ROLE_LLM_FIELDS
+    )
+    if not has_override:
+        return fallback_llm, resolved, False
+
+    derived_snapshot = dict(settings_snapshot or {})
+    for field, value in resolved.items():
+        derived_snapshot[f"llm.{field}"] = value
+
+    role_context = dict(research_context or {})
+    role_context["llm_role"] = role
+    llm = get_llm(
+        model_name=resolved["model"],
+        temperature=resolved["temperature"],
+        provider=resolved["provider"],
+        research_id=research_id,
+        research_context=role_context,
+        settings_snapshot=derived_snapshot,
+    )
+    return llm, resolved, True
+
+
 def _get_context_window_for_provider(provider_type, settings_snapshot=None):
     """Resolve the context window size for a provider.
 

@@ -524,14 +524,19 @@ def save_all_settings(
             # Determine setting type and category
             if key.startswith("llm."):
                 setting_type = SettingType.LLM
-                category = "llm_general"
-                if (
+                if key.startswith("llm.analysis."):
+                    category = "llm_analysis"
+                elif key.startswith("llm.report."):
+                    category = "llm_report"
+                elif (
                     "temperature" in key
                     or "max_tokens" in key
                     or "batch" in key
                     or "layers" in key
                 ):
                     category = "llm_parameters"
+                else:
+                    category = "llm_general"
             elif key.startswith("search."):
                 setting_type = SettingType.SEARCH
                 category = "search_general"

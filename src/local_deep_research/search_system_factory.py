@@ -27,6 +27,25 @@ def _get_setting(
     return unwrap_setting(value)
 
 
+def _make_analysis_citation_handler(
+    model: BaseChatModel,
+    analysis_model: BaseChatModel | None,
+    settings_snapshot: Optional[Dict],
+    handler_type: str | None = None,
+):
+    """Build a strategy-compatible handler only for a distinct analysis LLM."""
+    if analysis_model is None or analysis_model is model:
+        return None
+
+    from .citation_handler import CitationHandler
+
+    return CitationHandler(
+        analysis_model,
+        handler_type=handler_type,
+        settings_snapshot=settings_snapshot,
+    )
+
+
 def create_strategy(
     strategy_name: str,
     model: BaseChatModel,
@@ -69,6 +88,9 @@ def create_strategy(
         return SourceBasedSearchStrategy(
             model=model,
             search=search,
+            citation_handler=_make_analysis_citation_handler(
+                model, kwargs.get("analysis_model"), settings_snapshot
+            ),
             include_text_content=kwargs.get("include_text_content", True),
             use_cross_engine_filter=kwargs.get("use_cross_engine_filter", True),
             all_links_of_system=all_links_of_system,
@@ -144,6 +166,12 @@ def create_strategy(
         strategy = FocusedIterationStrategy(
             model=model,
             search=search,
+            citation_handler=_make_analysis_citation_handler(
+                model,
+                kwargs.get("analysis_model"),
+                settings_snapshot,
+                handler_type="forced_answer",
+            ),
             all_links_of_system=all_links_of_system,
             max_iterations=kwargs.get("max_iterations", 8),
             questions_per_iteration=kwargs.get("questions_per_iteration", 5),
@@ -186,7 +214,9 @@ def create_strategy(
 
         # Use standard citation handler (same question generator as regular focused-iteration)
         standard_citation_handler = CitationHandler(
-            model, handler_type="standard", settings_snapshot=settings_snapshot
+            kwargs.get("analysis_model") or model,
+            handler_type="standard",
+            settings_snapshot=settings_snapshot,
         )
 
         # Read focused_iteration settings with kwargs override
@@ -311,6 +341,9 @@ def create_strategy(
         return TopicOrganizationStrategy(
             model=model,
             search=search,
+            citation_handler=_make_analysis_citation_handler(
+                model, kwargs.get("analysis_model"), settings_snapshot
+            ),
             all_links_of_system=all_links_of_system,
             settings_snapshot=settings_snapshot,
             min_sources_per_topic=1,  # Allow single-source topics
@@ -357,6 +390,12 @@ def create_strategy(
         return LangGraphAgentStrategy(
             model=model,
             search=search,
+            citation_handler=_make_analysis_citation_handler(
+                model,
+                kwargs.get("analysis_model"),
+                settings_snapshot,
+                handler_type="standard",
+            ),
             max_iterations=kwargs.get(
                 "max_iterations",
                 _get_setting(
@@ -393,6 +432,9 @@ def create_strategy(
     return SourceBasedSearchStrategy(
         model=model,
         search=search,
+        citation_handler=_make_analysis_citation_handler(
+            model, kwargs.get("analysis_model"), settings_snapshot
+        ),
         include_text_content=True,
         use_cross_engine_filter=True,
         all_links_of_system=all_links_of_system,

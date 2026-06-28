@@ -200,8 +200,11 @@ def _infer_ui_element(value: Any, current: str = "text") -> str:
 # save. We use the most-general category per prefix here — sub-classifying
 # llm_general vs llm_parameters depends on the specific key, but the
 # self-heal only fires when the row was already mis-typed, so over-
-# generalizing the category is preferable to leaving it stale.
+# generalizing the category is preferable to leaving it stale. Role-specific
+# prefixes are unambiguous, so preserve their dedicated UI categories.
 _INFERRED_CATEGORY: Dict[str, str] = {
+    "llm.analysis.": "llm_analysis",
+    "llm.report.": "llm_report",
     "llm.": "llm_general",
     "search.": "search_general",
     "report.": "report_parameters",
@@ -736,7 +739,7 @@ class SettingsManager(ISettingsManager):
                 inferred_category: Optional[str] = None
                 for prefix, category in _INFERRED_CATEGORY.items():
                     if key.startswith(prefix):
-                        if prefix == "llm.":
+                        if prefix.startswith("llm."):
                             inferred_type = SettingType.LLM
                         elif prefix == "search.":
                             inferred_type = SettingType.SEARCH

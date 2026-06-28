@@ -38,6 +38,7 @@ class IntegratedReportGenerator:
         search_system=None,
         llm: BaseChatModel | None = None,
         settings_snapshot: Optional[Dict] = None,
+        rewrite_sections_with_report_llm: bool = False,
     ):
         """
         Args:
@@ -47,6 +48,8 @@ class IntegratedReportGenerator:
                 the default.
             llm: Custom LLM to use. Required if search_system is not provided.
             settings_snapshot: Optional settings snapshot for configurable values.
+            rewrite_sections_with_report_llm: Whether the injected LLM should
+                rewrite analyzed subsection material into final report prose.
 
         """
         # If search_system is provided, use its LLM; otherwise use the provided LLM
@@ -62,6 +65,8 @@ class IntegratedReportGenerator:
             self._owns_llm = True
             self.model = get_llm()
             self.search_system = AdvancedSearchSystem(llm=self.model)  # type: ignore[call-arg]
+
+        self.rewrite_sections_with_report_llm = rewrite_sections_with_report_llm
 
         self.searches_per_section = (
             searches_per_section  # Control search depth per section
@@ -277,6 +282,35 @@ class IntegratedReportGenerator:
             f"not covered above.\n"
         )
 
+    def _write_report_section(
+        self,
+        *,
+        query: str,
+        section_name: str,
+        subsection_name: str,
+        subsection_purpose: str,
+        analyzed_content: str,
+        previous_context: str,
+    ) -> str:
+        """Turn analyzed source material into final report prose."""
+        prompt = render_prompt(
+            "prompts.report_generator.integratedreportgenerator.write_section.prompt",
+            query=query,
+            section_name=section_name,
+            subsection_name=subsection_name,
+            subsection_purpose=subsection_purpose,
+            analyzed_content=analyzed_content,
+            previous_context=previous_context,
+        )
+        written = get_llm_response_text(self.model.invoke(prompt)).strip()
+        if not written:
+            logger.warning(
+                f"Report model returned empty content for {section_name} > "
+                f"{subsection_name}; using analyzed material"
+            )
+            return analyzed_content
+        return written
+
     def _research_and_generate_sections(
         self,
         initial_findings: Dict,
@@ -490,7 +524,18 @@ class IntegratedReportGenerator:
 
                 # Add the researched content for this subsection
                 if subsection_results.get("current_knowledge"):
-                    generated_content = subsection_results["current_knowledge"]
+                    analyzed_content = subsection_results["current_knowledge"]
+                    if getattr(self, "rewrite_sections_with_report_llm", False):
+                        generated_content = self._write_report_section(
+                            query=query,
+                            section_name=section["name"],
+                            subsection_name=subsection["name"],
+                            subsection_purpose=subsection["purpose"],
+                            analyzed_content=analyzed_content,
+                            previous_context=previous_context_section,
+                        )
+                    else:
+                        generated_content = analyzed_content
                     section_content.append(generated_content)
                     # Accumulate for context in subsequent sections
                     accumulated_findings.append(

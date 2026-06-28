@@ -1007,6 +1007,20 @@
     "value": "\n        Analyze this research content about: {{query}}\n\n        Content Summary:\n        {{combined_content_excerpt}}... [truncated]\n\n        Determine the most appropriate report structure by:\n        1. Analyzing the type of content (technical, business, academic, etc.)\n        2. Identifying main themes and logical groupings\n        3. Considering the depth and breadth of the research\n\n        Return a table of contents structure in this exact format:\n        STRUCTURE\n        1. [Section Name]\n           - [Subsection] | [purpose]\n        2. [Section Name]\n           - [Subsection] | [purpose]\n        ...\n        END_STRUCTURE\n\n        Make the structure specific to the content, not generic.\n        Each subsection must include its purpose after the | symbol.\n        DO NOT include sections about sources, citations, references, or methodology.\n        ",
     "visible": true
   },
+  "prompts.report_generator.integratedreportgenerator.write_section.prompt": {
+    "category": "prompts_reports",
+    "description": "Final report-writing prompt. Available placeholders: {{query}}, {{section_name}}, {{subsection_name}}, {{subsection_purpose}}, {{analyzed_content}}, {{previous_context}}",
+    "editable": true,
+    "max_value": 100000,
+    "min_value": null,
+    "name": "Report Generator — Write Final Section",
+    "options": null,
+    "step": null,
+    "type": "APP",
+    "ui_element": "textarea",
+    "value": "Write final report prose for the following section.\n\nOverall research question: {{query}}\nSection: {{section_name}}\nSubsection: {{subsection_name}}\nPurpose: {{subsection_purpose}}\n\nSource-grounded analyzed material:\n{{analyzed_content}}\n\nPreviously written report context:\n{{previous_context}}\n\nRequirements:\n- Use only claims supported by the analyzed material. Do not invent facts, sources, quotations, statistics, or citations.\n- Preserve every citation marker exactly as supplied, including bracketed numeric citations such as [1] and [2]. Never renumber, remove, merge, or create citation markers.\n- Produce polished, cohesive report prose focused on this subsection's purpose.\n- Avoid repeating material shown in the previous context.\n- Keep useful tables and concrete details when present.\n- Return only the finished section prose, without a heading or preamble.",
+    "visible": true
+  },
   "prompts.web_search_engines.engines.full_search.fullsearchresults.check_urls.prompt": {
     "category": "prompts_search_engines",
     "description": "Editable runtime prompt template. Available placeholders: {{current_time}}, {{query}}, {{results}}",

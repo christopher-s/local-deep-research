@@ -483,6 +483,37 @@ class TestSettingsManagerSetSetting:
         assert mock_setting.type == SettingType.CHAT
         assert mock_setting.category == "chat"
 
+    @pytest.mark.parametrize(
+        ("key", "expected_category"),
+        [
+            ("llm.analysis.model", "llm_analysis"),
+            ("llm.report.model", "llm_report"),
+        ],
+    )
+    def test_set_setting_self_heals_role_llm_category(
+        self, key, expected_category
+    ):
+        from local_deep_research.database.models import SettingType
+
+        mock_session = MagicMock()
+        mock_session.query.return_value.count.return_value = 1
+
+        mock_setting = MagicMock()
+        mock_setting.editable = True
+        mock_setting.type = SettingType.APP
+        mock_setting.category = None
+        mock_session.query.return_value.filter.return_value.first.return_value = mock_setting
+
+        manager = SettingsManager(db_session=mock_session)
+        manager._SettingsManager__settings_locked = False
+
+        with patch.object(manager, "_emit_settings_changed"):
+            result = manager.set_setting(key, "model-name")
+
+        assert result is True
+        assert mock_setting.type == SettingType.LLM
+        assert mock_setting.category == expected_category
+
     def test_set_setting_emits_websocket_event(self):
         """Test that set_setting emits WebSocket event on commit."""
         mock_session = MagicMock()

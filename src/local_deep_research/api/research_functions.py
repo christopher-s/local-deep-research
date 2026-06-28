@@ -9,7 +9,11 @@ from typing import Any, Callable
 from loguru import logger
 from local_deep_research.settings.logger import log_settings
 
-from ..config.llm_config import get_llm
+from ..config.llm_config import (
+    get_llm,
+    get_role_llm,
+    resolve_base_llm_settings,
+)
 from ..config.search_config import get_search
 from ..config.thread_settings import get_setting_from_snapshot
 from ..report_generator import IntegratedReportGenerator
@@ -27,6 +31,10 @@ def _close_system(system):
     safe_close(system, "search system")
     if hasattr(system, "search"):
         safe_close(system.search, "search engine")
+    if hasattr(
+        system, "analysis_model"
+    ) and system.analysis_model is not getattr(system, "model", None):
+        safe_close(system.analysis_model, "analysis LLM")
     if hasattr(system, "model"):
         safe_close(system.model, "system LLM")
 
@@ -109,6 +117,20 @@ def _init_search_system(
         research_context=research_context,
         settings_snapshot=settings_snapshot,
     )
+    base_llm_settings = resolve_base_llm_settings(
+        settings_snapshot,
+        provider=provider,
+        model_name=model_name,
+        temperature=temperature,
+    )
+    analysis_llm, analysis_llm_settings, _analysis_llm_owned = get_role_llm(
+        "analysis",
+        fallback_llm=llm,
+        settings_snapshot=settings_snapshot,
+        fallback_settings=base_llm_settings,
+        research_id=research_id,
+        research_context=research_context,
+    )
 
     # Set the search engine if specified or get from settings
     search_engine = None
@@ -137,6 +159,7 @@ def _init_search_system(
         logger.info("Search strategy: {}", search_strategy)
         system = AdvancedSearchSystem(
             llm=llm,
+            analysis_llm=analysis_llm,
             search=search_engine,
             strategy_name=search_strategy,
             username=username,
@@ -146,9 +169,12 @@ def _init_search_system(
             programmatic_mode=programmatic_mode,
             search_original_query=search_original_query,
         )
+        system.analysis_llm_settings = analysis_llm_settings
     except Exception:
         from ..utilities.resource_utils import safe_close
 
+        if analysis_llm is not llm:
+            safe_close(analysis_llm, "init analysis LLM")
         safe_close(llm, "init LLM")
         raise
 
@@ -468,6 +494,7 @@ def generate_report(
     set_search_context(search_context)
 
     system = None
+    report_llm = None
     try:
         system = _init_search_system(
             retrievers=retrievers, llms=llms, username=username, **kwargs
@@ -479,12 +506,25 @@ def generate_report(
         # Perform the initial research
         initial_findings = system.analyze_topic(query)
 
+        # Resolve the final report-writing model. Empty report-role settings
+        # reuse the analysis model without adding another client or LLM pass.
+        report_llm, _report_llm_settings, _report_llm_owned = get_role_llm(
+            "report",
+            fallback_llm=system.analysis_model,
+            fallback_settings=system.analysis_llm_settings,
+            settings_snapshot=kwargs.get("settings_snapshot"),
+            research_context=search_context,
+        )
+
         # Generate the structured report
         report_generator = IntegratedReportGenerator(
             search_system=system,
-            llm=system.model,
+            llm=report_llm,
             searches_per_section=searches_per_section,
             settings_snapshot=kwargs.get("settings_snapshot"),
+            rewrite_sections_with_report_llm=(
+                report_llm is not system.analysis_model
+            ),
         )
         report = report_generator.generate_report(initial_findings, query)
 
@@ -503,6 +543,14 @@ def generate_report(
             report["file_path"] = output_file
         return report
     finally:
+        if (
+            report_llm is not None
+            and system is not None
+            and report_llm is not system.analysis_model
+        ):
+            from ..utilities.resource_utils import safe_close
+
+            safe_close(report_llm, "report LLM")
         if system is not None:
             _close_system(system)
         clear_search_context()
